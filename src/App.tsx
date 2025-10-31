@@ -15,6 +15,8 @@ import Customers from "./pages/Customers";
 import Financial from "./pages/Financial";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
+import RecoverPassword from "./pages/RecoverPassword";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,6 +57,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/recuperar-senha" element={<RecoverPassword />} />
+          <Route path="/redefinir-senha" element={<ResetPassword />} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
           <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
