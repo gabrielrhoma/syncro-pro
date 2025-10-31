@@ -7,7 +7,11 @@ import {
   DollarSign,
   BarChart3,
   Settings,
-  LogOut
+  LogOut,
+  Building2,
+  FileText,
+  CreditCard,
+  TrendingUp
 } from "lucide-react";
 import {
   Sidebar,
@@ -28,11 +32,16 @@ import { toast } from "sonner";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Produtos", url: "/products", icon: Package },
   { title: "PDV", url: "/pos", icon: ShoppingCart },
+  { title: "Produtos", url: "/products", icon: Package },
   { title: "Vendas", url: "/sales", icon: BarChart3 },
   { title: "Clientes", url: "/customers", icon: Users },
+  { title: "Fornecedores", url: "/suppliers", icon: Building2 },
+  { title: "Compras", url: "/purchases", icon: FileText },
+  { title: "Contas a Pagar", url: "/accounts-payable", icon: CreditCard },
+  { title: "Contas a Receber", url: "/accounts-receivable", icon: TrendingUp },
   { title: "Financeiro", url: "/financial", icon: DollarSign },
+  { title: "Relatórios", url: "/reports", icon: BarChart3 },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 

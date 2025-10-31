@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { DollarSign, Package, ShoppingCart, TrendingUp, Users } from "lucide-react";
+import AIAssistant from "@/components/AIAssistant";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -94,16 +95,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Atividades Recentes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Nenhuma atividade recente
-            </p>
-          </CardContent>
-        </Card>
+        <AIAssistant />
 
         <Card>
           <CardHeader>
