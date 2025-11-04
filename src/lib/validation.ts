@@ -62,3 +62,12 @@ export const userInvitationSchema = z.object({
   email: z.string().trim().email('Email inválido').max(255, 'Email muito longo'),
   role: z.enum(['admin', 'manager', 'user'], { errorMap: () => ({ message: 'Função inválida' }) }),
 });
+
+// Transaction validation schema
+export const transactionSchema = z.object({
+  type: z.enum(['income', 'expense']),
+  category: z.string().trim().min(1, 'Categoria é obrigatória').max(100, 'Categoria muito longa'),
+  description: z.string().max(500, 'Descrição muito longa').trim().optional().or(z.literal('')),
+  amount: z.number().positive('Valor deve ser positivo').max(9999999.99, 'Valor muito alto'),
+  payment_method: z.enum(['dinheiro', 'cartao_credito', 'cartao_debito', 'pix', 'boleto', 'transferencia']),
+});

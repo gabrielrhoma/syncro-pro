@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { Plus, TrendingUp, TrendingDown } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { transactionSchema } from "@/lib/validation";
+import { z } from "zod";
 
 interface Transaction {
   id: string;
@@ -61,24 +63,40 @@ export default function Financial() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const validatedData = transactionSchema.parse({
+        type: formData.type,
+        category: formData.category,
+        description: formData.description,
+        amount: parseFloat(formData.amount),
+        payment_method: formData.payment_method,
+      });
 
-    const { error } = await supabase.from('transactions').insert({
-      type: formData.type,
-      category: formData.category,
-      description: formData.description,
-      amount: parseFloat(formData.amount),
-      payment_method: formData.payment_method,
-      created_by: user?.id,
-    });
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (error) {
-      toast.error("Erro ao criar transação");
-    } else {
-      toast.success("Transação criada!");
-      setOpen(false);
-      loadTransactions();
-      resetForm();
+      const { error } = await supabase.from('transactions').insert([{
+        type: validatedData.type,
+        category: validatedData.category,
+        description: validatedData.description,
+        amount: validatedData.amount,
+        payment_method: validatedData.payment_method,
+        created_by: user?.id,
+      }]);
+
+      if (error) {
+        toast.error("Erro ao criar transação");
+      } else {
+        toast.success("Transação criada!");
+        setOpen(false);
+        loadTransactions();
+        resetForm();
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+        return;
+      }
+      toast.error("Erro ao processar transação");
     }
   };
 
