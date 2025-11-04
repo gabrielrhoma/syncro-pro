@@ -71,3 +71,23 @@ export const transactionSchema = z.object({
   amount: z.number().positive('Valor deve ser positivo').max(9999999.99, 'Valor muito alto'),
   payment_method: z.enum(['dinheiro', 'cartao_credito', 'cartao_debito', 'pix', 'boleto', 'transferencia']),
 });
+
+// Sale validation schema
+export const saleSchema = z.object({
+  items: z.array(z.object({
+    product_id: z.string().uuid(),
+    quantity: z.number().int().positive().max(10000),
+    unit_price: z.number().positive(),
+    subtotal: z.number().positive(),
+  })).min(1, 'Carrinho não pode estar vazio'),
+  total_amount: z.number().positive('Total deve ser positivo'),
+  discount: z.number().min(0, 'Desconto não pode ser negativo'),
+  final_amount: z.number().positive('Valor final deve ser positivo'),
+  payment_method: z.enum(['dinheiro', 'cartao_credito', 'cartao_debito', 'pix']),
+}).refine(data => data.discount <= data.total_amount, {
+  message: 'Desconto não pode exceder o total',
+  path: ['discount'],
+}).refine(data => Math.abs(data.final_amount - (data.total_amount - data.discount)) < 0.01, {
+  message: 'Valor final inconsistente com total e desconto',
+  path: ['final_amount'],
+});

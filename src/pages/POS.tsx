@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Trash2, Search, ShoppingCart } from "lucide-react";
+import { saleSchema } from "@/lib/validation";
+import { z } from "zod";
 
 interface Product {
   id: string;
@@ -111,75 +113,94 @@ export default function POS() {
   };
 
   const finalizeSale = async () => {
-    if (cart.length === 0) {
-      toast.error("Carrinho vazio");
-      return;
-    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Usuário não autenticado");
+        return;
+      }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error("Usuário não autenticado");
-      return;
-    }
+      const totalAmount = calculateTotal();
+      const finalAmount = calculateFinal();
 
-    const saleNumber = `VENDA-${Date.now()}`;
-    const totalAmount = calculateTotal();
-    const finalAmount = calculateFinal();
-
-    const { data: sale, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        sale_number: saleNumber,
+      const saleData = {
+        items: cart.map((item) => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          unit_price: item.sale_price,
+          subtotal: item.subtotal,
+        })),
         total_amount: totalAmount,
         discount: discount,
         final_amount: finalAmount,
-        payment_method: paymentMethod,
-        cashier_id: user.id,
-      })
-      .select()
-      .single();
+        payment_method: paymentMethod as 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix',
+      };
 
-    if (saleError) {
-      toast.error("Erro ao criar venda");
-      return;
+      const validated = saleSchema.parse(saleData);
+
+      const saleNumber = `VENDA-${Date.now()}`;
+
+      const { data: sale, error: saleError } = await supabase
+        .from('sales')
+        .insert({
+          sale_number: saleNumber,
+          total_amount: validated.total_amount,
+          discount: validated.discount,
+          final_amount: validated.final_amount,
+          payment_method: validated.payment_method,
+          cashier_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (saleError) {
+        toast.error("Erro ao criar venda");
+        return;
+      }
+
+      const saleItems = validated.items.map((item) => ({
+        sale_id: sale.id,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        subtotal: item.subtotal,
+      }));
+
+      const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
+
+      if (itemsError) {
+        toast.error("Erro ao registrar itens");
+        return;
+      }
+
+      for (const item of cart) {
+        await supabase
+          .from('products')
+          .update({ stock_quantity: item.stock_quantity - item.quantity })
+          .eq('id', item.id);
+      }
+
+      await supabase.from('transactions').insert({
+        type: 'income',
+        category: 'Venda',
+        description: `Venda ${saleNumber}`,
+        amount: validated.final_amount,
+        payment_method: validated.payment_method,
+        sale_id: sale.id,
+        created_by: user.id,
+      });
+
+      toast.success("Venda finalizada!");
+      setCart([]);
+      setDiscount(0);
+      loadProducts();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+        return;
+      }
+      toast.error("Erro ao processar venda");
     }
-
-    const saleItems = cart.map((item) => ({
-      sale_id: sale.id,
-      product_id: item.id,
-      quantity: item.quantity,
-      unit_price: item.sale_price,
-      subtotal: item.subtotal,
-    }));
-
-    const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
-
-    if (itemsError) {
-      toast.error("Erro ao registrar itens");
-      return;
-    }
-
-    for (const item of cart) {
-      await supabase
-        .from('products')
-        .update({ stock_quantity: item.stock_quantity - item.quantity })
-        .eq('id', item.id);
-    }
-
-    await supabase.from('transactions').insert({
-      type: 'income',
-      category: 'Venda',
-      description: `Venda ${saleNumber}`,
-      amount: finalAmount,
-      payment_method: paymentMethod,
-      sale_id: sale.id,
-      created_by: user.id,
-    });
-
-    toast.success("Venda finalizada!");
-    setCart([]);
-    setDiscount(0);
-    loadProducts();
   };
 
   const filteredProducts = products.filter((product) =>
