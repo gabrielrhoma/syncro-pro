@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Textarea } from "@/components/ui/textarea";
+import { accountsPayableSchema, transactionSchema } from "@/lib/validation";
+import { z } from "zod";
 
 interface AccountPayable {
   id: string;
@@ -72,50 +74,86 @@ export default function AccountsPayable() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { error } = await supabase.from('accounts_payable').insert([{
-      ...formData,
-      amount: parseFloat(formData.amount),
-      supplier_id: formData.supplier_id || null,
-    }]);
+    try {
+      const validatedData = accountsPayableSchema.parse({
+        description: formData.description,
+        amount: parseFloat(formData.amount),
+        due_date: formData.due_date,
+        supplier_id: formData.supplier_id,
+        notes: formData.notes,
+        category: formData.category,
+      });
 
-    if (error) {
-      toast({ title: "Erro ao criar conta a pagar", variant: "destructive" });
-      return;
+      const { error } = await supabase.from('accounts_payable').insert([{
+        description: validatedData.description,
+        amount: validatedData.amount,
+        due_date: validatedData.due_date,
+        supplier_id: validatedData.supplier_id || null,
+        category: validatedData.category,
+        notes: validatedData.notes,
+      }]);
+
+      if (error) {
+        toast({ title: "Erro ao criar conta a pagar", variant: "destructive" });
+        return;
+      }
+
+      toast({ title: "Conta a pagar criada com sucesso!" });
+      resetForm();
+      loadAccounts();
+      setDialogOpen(false);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({ title: error.errors[0].message, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Erro ao processar dados", variant: "destructive" });
     }
-
-    toast({ title: "Conta a pagar criada com sucesso!" });
-    resetForm();
-    loadAccounts();
-    setDialogOpen(false);
   };
 
   const markAsPaid = async (id: string, amount: number) => {
     if (!confirm("Confirma o pagamento desta conta?")) return;
 
-    const { error } = await supabase
-      .from('accounts_payable')
-      .update({ 
-        status: 'paid',
-        payment_date: new Date().toISOString().split('T')[0],
-      })
-      .eq('id', id);
+    try {
+      const validatedTransaction = transactionSchema.parse({
+        type: 'expense' as const,
+        category: 'Pagamento a Fornecedor',
+        amount: amount,
+        description: 'Pagamento de conta',
+        payment_method: 'transferencia' as const,
+      });
 
-    if (error) {
-      toast({ title: "Erro ao marcar como pago", variant: "destructive" });
-      return;
+      const { error } = await supabase
+        .from('accounts_payable')
+        .update({ 
+          status: 'paid',
+          payment_date: new Date().toISOString().split('T')[0],
+        })
+        .eq('id', id);
+
+      if (error) {
+        toast({ title: "Erro ao marcar como pago", variant: "destructive" });
+        return;
+      }
+
+      // Registrar transação de despesa
+      await supabase.from('transactions').insert([{
+        type: validatedTransaction.type,
+        category: validatedTransaction.category,
+        amount: validatedTransaction.amount,
+        description: validatedTransaction.description,
+        payment_method: validatedTransaction.payment_method,
+      }]);
+
+      toast({ title: "Conta marcada como paga!" });
+      loadAccounts();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({ title: error.errors[0].message, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Erro ao processar pagamento", variant: "destructive" });
     }
-
-    // Registrar transação de despesa
-    await supabase.from('transactions').insert([{
-      type: 'expense',
-      category: 'Pagamento a Fornecedor',
-      amount: amount,
-      description: 'Pagamento de conta',
-      payment_method: 'transferencia',
-    }]);
-
-    toast({ title: "Conta marcada como paga!" });
-    loadAccounts();
   };
 
   const resetForm = () => {

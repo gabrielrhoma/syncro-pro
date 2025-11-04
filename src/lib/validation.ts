@@ -91,3 +91,22 @@ export const saleSchema = z.object({
   message: 'Valor final inconsistente com total e desconto',
   path: ['final_amount'],
 });
+
+// Accounts Payable validation schema
+export const accountsPayableSchema = z.object({
+  description: z.string().trim().min(1, 'Descrição é obrigatória').max(200, 'Descrição muito longa'),
+  amount: z.number().positive('Valor deve ser positivo').max(9999999.99, 'Valor muito alto'),
+  due_date: z.string().min(1, 'Data de vencimento é obrigatória'),
+  supplier_id: z.string().uuid().optional().or(z.literal('')),
+  notes: z.string().max(1000, 'Notas muito longas').trim().optional().or(z.literal('')),
+  category: z.string().max(100, 'Categoria muito longa').trim().optional().or(z.literal('')),
+});
+
+// Accounts Receivable validation schema
+export const accountsReceivableSchema = z.object({
+  description: z.string().trim().min(1, 'Descrição é obrigatória').max(200, 'Descrição muito longa'),
+  amount: z.number().positive('Valor deve ser positivo').max(9999999.99, 'Valor muito alto'),
+  due_date: z.string().min(1, 'Data de vencimento é obrigatória'),
+  customer_id: z.string().uuid().optional().or(z.literal('')),
+  notes: z.string().max(1000, 'Notas muito longas').trim().optional().or(z.literal('')),
+});

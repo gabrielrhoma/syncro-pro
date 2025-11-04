@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Textarea } from "@/components/ui/textarea";
+import { accountsReceivableSchema, transactionSchema } from "@/lib/validation";
+import { z } from "zod";
 
 interface AccountReceivable {
   id: string;
@@ -69,50 +71,84 @@ export default function AccountsReceivable() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { error } = await supabase.from('accounts_receivable').insert([{
-      ...formData,
-      amount: parseFloat(formData.amount),
-      customer_id: formData.customer_id || null,
-    }]);
+    try {
+      const validatedData = accountsReceivableSchema.parse({
+        description: formData.description,
+        amount: parseFloat(formData.amount),
+        due_date: formData.due_date,
+        customer_id: formData.customer_id,
+        notes: formData.notes,
+      });
 
-    if (error) {
-      toast({ title: "Erro ao criar conta a receber", variant: "destructive" });
-      return;
+      const { error } = await supabase.from('accounts_receivable').insert([{
+        description: validatedData.description,
+        amount: validatedData.amount,
+        due_date: validatedData.due_date,
+        customer_id: validatedData.customer_id || null,
+        notes: validatedData.notes,
+      }]);
+
+      if (error) {
+        toast({ title: "Erro ao criar conta a receber", variant: "destructive" });
+        return;
+      }
+
+      toast({ title: "Conta a receber criada com sucesso!" });
+      resetForm();
+      loadAccounts();
+      setDialogOpen(false);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({ title: error.errors[0].message, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Erro ao processar dados", variant: "destructive" });
     }
-
-    toast({ title: "Conta a receber criada com sucesso!" });
-    resetForm();
-    loadAccounts();
-    setDialogOpen(false);
   };
 
   const markAsReceived = async (id: string, amount: number) => {
     if (!confirm("Confirma o recebimento desta conta?")) return;
 
-    const { error } = await supabase
-      .from('accounts_receivable')
-      .update({ 
-        status: 'paid',
-        payment_date: new Date().toISOString().split('T')[0],
-      })
-      .eq('id', id);
+    try {
+      const validatedTransaction = transactionSchema.parse({
+        type: 'income' as const,
+        category: 'Recebimento',
+        amount: amount,
+        description: 'Recebimento de conta',
+        payment_method: 'transferencia' as const,
+      });
 
-    if (error) {
-      toast({ title: "Erro ao marcar como recebido", variant: "destructive" });
-      return;
+      const { error } = await supabase
+        .from('accounts_receivable')
+        .update({ 
+          status: 'paid',
+          payment_date: new Date().toISOString().split('T')[0],
+        })
+        .eq('id', id);
+
+      if (error) {
+        toast({ title: "Erro ao marcar como recebido", variant: "destructive" });
+        return;
+      }
+
+      // Registrar transação de receita
+      await supabase.from('transactions').insert([{
+        type: validatedTransaction.type,
+        category: validatedTransaction.category,
+        amount: validatedTransaction.amount,
+        description: validatedTransaction.description,
+        payment_method: validatedTransaction.payment_method,
+      }]);
+
+      toast({ title: "Conta marcada como recebida!" });
+      loadAccounts();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({ title: error.errors[0].message, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Erro ao processar recebimento", variant: "destructive" });
     }
-
-    // Registrar transação de receita
-    await supabase.from('transactions').insert([{
-      type: 'income',
-      category: 'Recebimento',
-      amount: amount,
-      description: 'Recebimento de conta',
-      payment_method: 'transferencia',
-    }]);
-
-    toast({ title: "Conta marcada como recebida!" });
-    loadAccounts();
   };
 
   const resetForm = () => {
