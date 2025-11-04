@@ -55,37 +55,67 @@ export default function Customers() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // Validate input using Zod
+    const { customerSchema } = await import('@/lib/validation');
+    try {
+      const validatedData = customerSchema.parse({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        cpf_cnpj: formData.cpf_cnpj,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip_code: formData.zip_code,
+        notes: formData.notes,
+      });
 
-    const customerData = {
-      ...formData,
-      created_by: user?.id,
-    };
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (editingCustomer) {
-      const { error } = await supabase
-        .from('customers')
-        .update(customerData)
-        .eq('id', editingCustomer.id);
+      const customerData = {
+        name: validatedData.name,
+        email: validatedData.email || null,
+        phone: validatedData.phone || null,
+        cpf_cnpj: validatedData.cpf_cnpj || null,
+        address: validatedData.address || null,
+        city: validatedData.city || null,
+        state: validatedData.state || null,
+        zip_code: validatedData.zip_code || null,
+        notes: validatedData.notes || null,
+        created_by: user?.id,
+      };
 
-      if (error) {
-        toast.error("Erro ao atualizar cliente");
+      if (editingCustomer) {
+        const { error } = await supabase
+          .from('customers')
+          .update(customerData)
+          .eq('id', editingCustomer.id);
+
+        if (error) {
+          toast.error("Erro ao atualizar cliente");
+        } else {
+          toast.success("Cliente atualizado!");
+          setOpen(false);
+          loadCustomers();
+          resetForm();
+        }
       } else {
-        toast.success("Cliente atualizado!");
-        setOpen(false);
-        loadCustomers();
-        resetForm();
+        const { error } = await supabase.from('customers').insert(customerData);
+
+        if (error) {
+          toast.error("Erro ao criar cliente");
+        } else {
+          toast.success("Cliente criado!");
+          setOpen(false);
+          loadCustomers();
+          resetForm();
+        }
       }
-    } else {
-      const { error } = await supabase.from('customers').insert(customerData);
-
-      if (error) {
-        toast.error("Erro ao criar cliente");
+    } catch (error: any) {
+      if (error.errors && error.errors[0]) {
+        toast.error(error.errors[0].message);
       } else {
-        toast.success("Cliente criado!");
-        setOpen(false);
-        loadCustomers();
-        resetForm();
+        toast.error('Dados inválidos');
       }
     }
   };

@@ -52,20 +52,44 @@ export default function Calendar() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // Validate input using Zod
+    const { calendarEventSchema } = await import('@/lib/validation');
+    try {
+      const validatedData = calendarEventSchema.parse({
+        title: formData.title,
+        description: formData.description,
+        event_type: formData.event_type,
+        location: formData.location,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+      });
 
-    const { error } = await supabase.from('calendar_events').insert({
-      ...formData,
-      created_by: user?.id,
-    });
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (error) {
-      toast.error("Erro ao criar evento");
-    } else {
-      toast.success("Evento criado!");
-      setOpen(false);
-      loadEvents();
-      resetForm();
+      const { error } = await supabase.from('calendar_events').insert({
+        title: validatedData.title,
+        description: validatedData.description || null,
+        event_type: validatedData.event_type,
+        location: validatedData.location || null,
+        start_date: validatedData.start_date,
+        end_date: validatedData.end_date,
+        created_by: user?.id || '',
+      });
+
+      if (error) {
+        toast.error("Erro ao criar evento");
+      } else {
+        toast.success("Evento criado!");
+        setOpen(false);
+        loadEvents();
+        resetForm();
+      }
+    } catch (error: any) {
+      if (error.errors && error.errors[0]) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error('Dados inválidos');
+      }
     }
   };
 

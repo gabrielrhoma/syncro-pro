@@ -62,23 +62,38 @@ export default function UserManagement() {
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    // Validate input using Zod
+    const { userInvitationSchema } = await import('@/lib/validation');
+    try {
+      const validatedData = userInvitationSchema.parse({
+        email: formData.email,
+        role: formData.role,
+      });
 
-    const { error } = await supabase.from('user_invitations').insert({
-      email: formData.email,
-      role: formData.role,
-      invited_by: user?.id,
-      expires_at: expiresAt.toISOString(),
-    });
+      const { data: { user } } = await supabase.auth.getUser();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
 
-    if (error) {
-      toast.error("Erro ao enviar convite");
-    } else {
-      toast.success("Convite enviado!");
-      setOpen(false);
-      setFormData({ email: "", role: "user" });
+      const { error } = await supabase.from('user_invitations').insert({
+        email: validatedData.email,
+        role: validatedData.role,
+        invited_by: user?.id,
+        expires_at: expiresAt.toISOString(),
+      });
+
+      if (error) {
+        toast.error("Erro ao enviar convite");
+      } else {
+        toast.success("Convite enviado!");
+        setOpen(false);
+        setFormData({ email: "", role: "user" });
+      }
+    } catch (error: any) {
+      if (error.errors && error.errors[0]) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error('Dados inválidos');
+      }
     }
   };
 

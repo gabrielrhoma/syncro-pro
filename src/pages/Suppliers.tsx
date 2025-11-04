@@ -64,30 +64,69 @@ export default function Suppliers() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (editingSupplier) {
-      const { error } = await supabase
-        .from('suppliers')
-        .update(formData)
-        .eq('id', editingSupplier.id);
+    // Validate input using Zod
+    const { supplierSchema } = await import('@/lib/validation');
+    try {
+      const validatedData = supplierSchema.parse({
+        name: formData.name,
+        legal_name: formData.legal_name,
+        cnpj: formData.cnpj,
+        email: formData.email,
+        phone: formData.phone,
+        contact_person: formData.contact_person,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip_code: formData.zip_code,
+        notes: formData.notes,
+      });
 
-      if (error) {
-        toast({ title: "Erro ao atualizar fornecedor", variant: "destructive" });
-        return;
-      }
-      toast({ title: "Fornecedor atualizado com sucesso!" });
-    } else {
-      const { error } = await supabase.from('suppliers').insert([formData]);
+      const supplierData = {
+        name: validatedData.name,
+        legal_name: validatedData.legal_name || null,
+        cnpj: validatedData.cnpj || null,
+        email: validatedData.email || null,
+        phone: validatedData.phone || null,
+        contact_person: validatedData.contact_person || null,
+        address: validatedData.address || null,
+        city: validatedData.city || null,
+        state: validatedData.state || null,
+        zip_code: validatedData.zip_code || null,
+        notes: validatedData.notes || null,
+        active: formData.active,
+      };
 
-      if (error) {
-        toast({ title: "Erro ao criar fornecedor", variant: "destructive" });
-        return;
+      if (editingSupplier) {
+        const { error } = await supabase
+          .from('suppliers')
+          .update(supplierData)
+          .eq('id', editingSupplier.id);
+
+        if (error) {
+          toast({ title: "Erro ao atualizar fornecedor", variant: "destructive" });
+          return;
+        }
+        toast({ title: "Fornecedor atualizado com sucesso!" });
+      } else {
+        const { error } = await supabase.from('suppliers').insert([supplierData]);
+
+        if (error) {
+          toast({ title: "Erro ao criar fornecedor", variant: "destructive" });
+          return;
+        }
+        toast({ title: "Fornecedor criado com sucesso!" });
       }
-      toast({ title: "Fornecedor criado com sucesso!" });
+
+      resetForm();
+      loadSuppliers();
+      setDialogOpen(false);
+    } catch (error: any) {
+      if (error.errors && error.errors[0]) {
+        toast({ title: error.errors[0].message, variant: "destructive" });
+      } else {
+        toast({ title: 'Dados inválidos', variant: "destructive" });
+      }
     }
-
-    resetForm();
-    loadSuppliers();
-    setDialogOpen(false);
   };
 
   const handleEdit = (supplier: Supplier) => {
