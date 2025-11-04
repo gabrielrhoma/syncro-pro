@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { productSchema } from "@/lib/validation";
+import { z } from "zod";
 
 interface Product {
   id: string;
@@ -66,41 +68,67 @@ export default function Products() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const productData = {
-      name: formData.name,
-      sku: formData.sku || null,
-      sale_price: parseFloat(formData.sale_price),
-      cost_price: parseFloat(formData.cost_price) || 0,
-      stock_quantity: parseInt(formData.stock_quantity) || 0,
-      min_stock: parseInt(formData.min_stock) || 0,
-      category_id: formData.category_id || null,
-    };
+    try {
+      const validatedData = productSchema.parse({
+        name: formData.name,
+        sku: formData.sku || "",
+        sale_price: parseFloat(formData.sale_price) || 0,
+        cost_price: formData.cost_price ? parseFloat(formData.cost_price) : undefined,
+        stock_quantity: formData.stock_quantity ? parseInt(formData.stock_quantity) : undefined,
+        min_stock: formData.min_stock ? parseInt(formData.min_stock) : undefined,
+        description: "",
+        barcode: "",
+        ncm: "",
+        cfop: "",
+        cst_icms: "",
+        icms_rate: undefined,
+        pis_rate: undefined,
+        cofins_rate: undefined,
+        ipi_rate: undefined,
+      });
 
-    if (editingProduct) {
-      const { error } = await supabase
-        .from('products')
-        .update(productData)
-        .eq('id', editingProduct.id);
+      const productData = {
+        name: validatedData.name,
+        sku: validatedData.sku || null,
+        sale_price: validatedData.sale_price,
+        cost_price: validatedData.cost_price || 0,
+        stock_quantity: validatedData.stock_quantity || 0,
+        min_stock: validatedData.min_stock || 0,
+        category_id: formData.category_id || null,
+      };
 
-      if (error) {
-        toast.error("Erro ao atualizar produto");
+      if (editingProduct) {
+        const { error } = await supabase
+          .from('products')
+          .update(productData)
+          .eq('id', editingProduct.id);
+
+        if (error) {
+          toast.error("Erro ao atualizar produto");
+        } else {
+          toast.success("Produto atualizado!");
+          setOpen(false);
+          loadProducts();
+          resetForm();
+        }
       } else {
-        toast.success("Produto atualizado!");
-        setOpen(false);
-        loadProducts();
-        resetForm();
-      }
-    } else {
-      const { error } = await supabase.from('products').insert(productData);
+        const { error } = await supabase.from('products').insert(productData);
 
-      if (error) {
-        toast.error("Erro ao criar produto");
-      } else {
-        toast.success("Produto criado!");
-        setOpen(false);
-        loadProducts();
-        resetForm();
+        if (error) {
+          toast.error("Erro ao criar produto");
+        } else {
+          toast.success("Produto criado!");
+          setOpen(false);
+          loadProducts();
+          resetForm();
+        }
       }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+        return;
+      }
+      toast.error("Erro ao processar produto");
     }
   };
 
