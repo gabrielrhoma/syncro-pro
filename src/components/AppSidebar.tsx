@@ -11,7 +11,10 @@ import {
   Building2,
   FileText,
   CreditCard,
-  TrendingUp
+  TrendingUp,
+  CalendarDays,
+  UserCog,
+  Wallet
 } from "lucide-react";
 import {
   Sidebar,
@@ -41,7 +44,10 @@ const menuItems = [
   { title: "Contas a Pagar", url: "/accounts-payable", icon: CreditCard },
   { title: "Contas a Receber", url: "/accounts-receivable", icon: TrendingUp },
   { title: "Financeiro", url: "/financial", icon: DollarSign },
+  { title: "Controle de Caixa", url: "/cash-control", icon: Wallet },
   { title: "Relatórios", url: "/reports", icon: BarChart3 },
+  { title: "Agenda", url: "/calendar", icon: CalendarDays },
+  { title: "Usuários", url: "/users", icon: UserCog },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 

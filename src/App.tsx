@@ -23,6 +23,9 @@ import Auth from "./pages/Auth";
 import RecoverPassword from "./pages/RecoverPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import UserManagement from "./pages/UserManagement";
+import Calendar from "./pages/Calendar";
+import CashControl from "./pages/CashControl";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +79,9 @@ const App = () => (
           <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+          <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
+          <Route path="/cash-control" element={<ProtectedRoute><CashControl /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

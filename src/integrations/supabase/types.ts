@@ -137,6 +137,107 @@ export type Database = {
           },
         ]
       }
+      calendar_events: {
+        Row: {
+          all_day: boolean | null
+          attendees: Json | null
+          created_at: string | null
+          created_by: string
+          description: string | null
+          end_date: string
+          event_type: string
+          id: string
+          location: string | null
+          start_date: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          all_day?: boolean | null
+          attendees?: Json | null
+          created_at?: string | null
+          created_by: string
+          description?: string | null
+          end_date: string
+          event_type: string
+          id?: string
+          location?: string | null
+          start_date: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          all_day?: boolean | null
+          attendees?: Json | null
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          end_date?: string
+          event_type?: string
+          id?: string
+          location?: string | null
+          start_date?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      cash_registers: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          closing_balance: number | null
+          created_at: string | null
+          current_cash_amount: number | null
+          id: string
+          name: string
+          notes: string | null
+          opened_at: string | null
+          opened_by: string | null
+          opening_balance: number | null
+          status: string | null
+          store_id: string | null
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_balance?: number | null
+          created_at?: string | null
+          current_cash_amount?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          opened_at?: string | null
+          opened_by?: string | null
+          opening_balance?: number | null
+          status?: string | null
+          store_id?: string | null
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_balance?: number | null
+          created_at?: string | null
+          current_cash_amount?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          opened_at?: string | null
+          opened_by?: string | null
+          opening_balance?: number | null
+          status?: string | null
+          store_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_registers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string | null
@@ -228,6 +329,7 @@ export type Database = {
           sale_price: number
           sku: string | null
           stock_quantity: number | null
+          store_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -251,6 +353,7 @@ export type Database = {
           sale_price: number
           sku?: string | null
           stock_quantity?: number | null
+          store_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -274,6 +377,7 @@ export type Database = {
           sale_price?: number
           sku?: string | null
           stock_quantity?: number | null
+          store_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -282,6 +386,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
@@ -465,6 +576,7 @@ export type Database = {
           payment_method: string | null
           sale_number: string
           status: string | null
+          store_id: string | null
           total_amount: number
         }
         Insert: {
@@ -478,6 +590,7 @@ export type Database = {
           payment_method?: string | null
           sale_number: string
           status?: string | null
+          store_id?: string | null
           total_amount: number
         }
         Update: {
@@ -491,6 +604,7 @@ export type Database = {
           payment_method?: string | null
           sale_number?: string
           status?: string | null
+          store_id?: string | null
           total_amount?: number
         }
         Relationships: [
@@ -501,7 +615,103 @@ export type Database = {
             referencedRelation: "customers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sales_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      sales_commissions: {
+        Row: {
+          commission_amount: number
+          commission_percentage: number | null
+          created_at: string | null
+          id: string
+          paid_at: string | null
+          sale_id: string | null
+          salesperson_id: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          commission_amount: number
+          commission_percentage?: number | null
+          created_at?: string | null
+          id?: string
+          paid_at?: string | null
+          sale_id?: string | null
+          salesperson_id: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          commission_amount?: number
+          commission_percentage?: number | null
+          created_at?: string | null
+          id?: string
+          paid_at?: string | null
+          sale_id?: string | null
+          salesperson_id?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_commissions_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stores: {
+        Row: {
+          active: boolean | null
+          address: string | null
+          city: string | null
+          code: string
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          state: string | null
+          updated_at: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          address?: string | null
+          city?: string | null
+          code: string
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          state?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          address?: string | null
+          city?: string | null
+          code?: string
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          state?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
       }
       suppliers: {
         Row: {
@@ -606,6 +816,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          invited_by: string
+          role: Database["public"]["Enums"]["app_role"]
+          status?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: string | null
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

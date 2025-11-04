@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { DollarSign, Package, ShoppingCart, TrendingUp, Users } from "lucide-react";
 import AIAssistant from "@/components/AIAssistant";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -12,9 +13,12 @@ export default function Dashboard() {
     todaySales: 0,
     lowStockProducts: 0,
   });
+  const [salesChart, setSalesChart] = useState<any[]>([]);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
 
   useEffect(() => {
     loadStats();
+    loadChartData();
   }, []);
 
   const loadStats = async () => {
@@ -38,6 +42,49 @@ export default function Dashboard() {
       todaySales: todayTotal,
       lowStockProducts: lowStockRes.data?.length || 0,
     });
+  };
+
+  const loadChartData = async () => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      return date.toISOString().split('T')[0];
+    });
+
+    const salesData = await Promise.all(
+      last7Days.map(async (date) => {
+        const { data } = await supabase
+          .from('sales')
+          .select('final_amount')
+          .gte('created_at', date)
+          .lt('created_at', new Date(new Date(date).getTime() + 86400000).toISOString());
+        
+        const total = data?.reduce((sum, sale) => sum + Number(sale.final_amount), 0) || 0;
+        const dayName = new Date(date).toLocaleDateString('pt-BR', { weekday: 'short' });
+        return { day: dayName, vendas: total };
+      })
+    );
+
+    setSalesChart(salesData);
+
+    const { data: productsData } = await supabase
+      .from('sale_items')
+      .select('product_id, quantity, products(name)')
+      .limit(100);
+
+    const productMap = new Map();
+    productsData?.forEach((item: any) => {
+      const name = item.products?.name || 'Produto sem nome';
+      const current = productMap.get(name) || 0;
+      productMap.set(name, current + item.quantity);
+    });
+
+    const topProds = Array.from(productMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, qty]) => ({ produto: name, vendas: qty }));
+
+    setTopProducts(topProds);
   };
 
   const statCards = [
@@ -95,26 +142,47 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <AIAssistant />
+        <Card>
+          <CardHeader>
+            <CardTitle>Vendas dos Últimos 7 Dias</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={salesChart}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="day" className="text-xs" />
+                <YAxis className="text-xs" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                  formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                />
+                <Line type="monotone" dataKey="vendas" stroke="hsl(var(--primary))" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Resumo Financeiro</CardTitle>
+            <CardTitle>Top 5 Produtos Mais Vendidos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Total em Vendas:</span>
-                <span className="font-semibold text-accent">R$ {stats.totalSales.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Hoje:</span>
-                <span className="font-semibold text-accent">R$ {stats.todaySales.toFixed(2)}</span>
-              </div>
-            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={topProducts}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="produto" className="text-xs" />
+                <YAxis className="text-xs" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                />
+                <Bar dataKey="vendas" fill="hsl(var(--accent))" />
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
+
+      <AIAssistant />
     </div>
   );
 }
