@@ -1,8 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Settings as SettingsIcon, Database, Users } from "lucide-react";
+import { Settings as SettingsIcon, Database, Users, FileText } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function Settings() {
+  const navigate = useNavigate();
+
   return (
     <div className="space-y-6">
       <div>
@@ -44,6 +47,23 @@ export default function Settings() {
             </Button>
             <Button variant="outline" className="w-full justify-start">
               Restaurar Dados
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Configurações Fiscais
+            </CardTitle>
+            <CardDescription>
+              Configure emissão de NFC-e e NF-e
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/settings/fiscal')}>
+              Acessar Configurações Fiscais
             </Button>
           </CardContent>
         </Card>

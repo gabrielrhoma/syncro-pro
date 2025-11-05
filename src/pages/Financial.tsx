@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, Wallet, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { transactionSchema } from "@/lib/validation";
@@ -27,6 +27,12 @@ interface Transaction {
 export default function Financial() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [open, setOpen] = useState(false);
+  const [cashFlow, setCashFlow] = useState({
+    cashBalance: 0,
+    accountsReceivable: 0,
+    accountsPayable: 0,
+    projectedFlow: 0,
+  });
   const [formData, setFormData] = useState({
     type: "income",
     category: "",
@@ -37,7 +43,44 @@ export default function Financial() {
 
   useEffect(() => {
     loadTransactions();
+    loadCashFlow();
   }, []);
+
+  const loadCashFlow = async () => {
+    // Saldo em caixa (caixas abertos)
+    const { data: registers } = await supabase
+      .from('cash_registers')
+      .select('current_cash_amount')
+      .eq('status', 'open');
+    
+    const cashBalance = registers?.reduce((sum, r) => sum + Number(r.current_cash_amount), 0) || 0;
+
+    // Contas a receber (pendentes)
+    const { data: receivables } = await supabase
+      .from('accounts_receivable')
+      .select('amount')
+      .eq('status', 'pending');
+    
+    const accountsReceivable = receivables?.reduce((sum, r) => sum + Number(r.amount), 0) || 0;
+
+    // Contas a pagar (pendentes)
+    const { data: payables } = await supabase
+      .from('accounts_payable')
+      .select('amount')
+      .eq('status', 'pending');
+    
+    const accountsPayable = payables?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+
+    // Fluxo de caixa projetado
+    const projectedFlow = cashBalance + accountsReceivable - accountsPayable;
+
+    setCashFlow({
+      cashBalance,
+      accountsReceivable,
+      accountsPayable,
+      projectedFlow,
+    });
+  };
 
   const loadTransactions = async () => {
     const { data } = await supabase
@@ -207,7 +250,40 @@ export default function Financial() {
         </Dialog>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Saldo em Caixa</CardTitle>
+            <Wallet className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">R$ {cashFlow.cashBalance.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Caixas abertos</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">A Receber</CardTitle>
+            <ArrowUpCircle className="h-4 w-4 text-accent" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-accent">R$ {cashFlow.accountsReceivable.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Contas pendentes</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">A Pagar</CardTitle>
+            <ArrowDownCircle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">R$ {cashFlow.accountsPayable.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Contas pendentes</p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Receitas</CardTitle>
@@ -215,27 +291,19 @@ export default function Financial() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-accent">R$ {totals.income.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-primary/50">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Despesas</CardTitle>
-            <TrendingDown className="h-4 w-4 text-destructive" />
+            <CardTitle className="text-sm font-medium">Fluxo Projetado</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">R$ {totals.expense.toFixed(2)}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Saldo</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-accent' : 'text-destructive'}`}>
-              R$ {totals.balance.toFixed(2)}
+            <div className={`text-2xl font-bold ${cashFlow.projectedFlow >= 0 ? 'text-accent' : 'text-destructive'}`}>
+              R$ {cashFlow.projectedFlow.toFixed(2)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Saldo + Receber - Pagar</p>
           </CardContent>
         </Card>
       </div>

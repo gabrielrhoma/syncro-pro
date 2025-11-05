@@ -184,6 +184,7 @@ export type Database = {
       }
       cash_registers: {
         Row: {
+          ai_analysis: string | null
           closed_at: string | null
           closed_by: string | null
           closing_balance: number | null
@@ -199,6 +200,7 @@ export type Database = {
           store_id: string | null
         }
         Insert: {
+          ai_analysis?: string | null
           closed_at?: string | null
           closed_by?: string | null
           closing_balance?: number | null
@@ -214,6 +216,7 @@ export type Database = {
           store_id?: string | null
         }
         Update: {
+          ai_analysis?: string | null
           closed_at?: string | null
           closed_by?: string | null
           closing_balance?: number | null
@@ -256,6 +259,54 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+        }
+        Relationships: []
+      }
+      company_settings: {
+        Row: {
+          certificate_expires_at: string | null
+          certificate_password: string | null
+          cnpj: string | null
+          company_name: string | null
+          created_at: string | null
+          digital_certificate_a1: string | null
+          id: string
+          sefaz_environment:
+            | Database["public"]["Enums"]["sefaz_environment"]
+            | null
+          state_registration: string | null
+          tax_regime: Database["public"]["Enums"]["tax_regime"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          certificate_expires_at?: string | null
+          certificate_password?: string | null
+          cnpj?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          digital_certificate_a1?: string | null
+          id?: string
+          sefaz_environment?:
+            | Database["public"]["Enums"]["sefaz_environment"]
+            | null
+          state_registration?: string | null
+          tax_regime?: Database["public"]["Enums"]["tax_regime"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          certificate_expires_at?: string | null
+          certificate_password?: string | null
+          cnpj?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          digital_certificate_a1?: string | null
+          id?: string
+          sefaz_environment?:
+            | Database["public"]["Enums"]["sefaz_environment"]
+            | null
+          state_registration?: string | null
+          tax_regime?: Database["public"]["Enums"]["tax_regime"] | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -306,6 +357,103 @@ export type Database = {
           zip_code?: string | null
         }
         Relationships: []
+      }
+      fiscal_documents: {
+        Row: {
+          created_at: string | null
+          danfe_url: string | null
+          error_message: string | null
+          id: string
+          sale_id: string | null
+          sefaz_protocol: string | null
+          status: string
+          type: string
+          updated_at: string | null
+          xml_data: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          danfe_url?: string | null
+          error_message?: string | null
+          id?: string
+          sale_id?: string | null
+          sefaz_protocol?: string | null
+          status?: string
+          type: string
+          updated_at?: string | null
+          xml_data?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          danfe_url?: string | null
+          error_message?: string | null
+          id?: string
+          sale_id?: string | null
+          sefaz_protocol?: string | null
+          status?: string
+          type?: string
+          updated_at?: string | null
+          xml_data?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_documents_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_tax_info: {
+        Row: {
+          cest: string | null
+          cfop: string | null
+          cofins_tax_situation: string | null
+          created_at: string | null
+          icms_origin: string | null
+          icms_tax_situation: string | null
+          id: string
+          ncm: string | null
+          pis_tax_situation: string | null
+          product_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          cest?: string | null
+          cfop?: string | null
+          cofins_tax_situation?: string | null
+          created_at?: string | null
+          icms_origin?: string | null
+          icms_tax_situation?: string | null
+          id?: string
+          ncm?: string | null
+          pis_tax_situation?: string | null
+          product_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          cest?: string | null
+          cfop?: string | null
+          cofins_tax_situation?: string | null
+          created_at?: string | null
+          icms_origin?: string | null
+          icms_tax_situation?: string | null
+          id?: string
+          ncm?: string | null
+          pis_tax_situation?: string | null
+          product_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_tax_info_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {
@@ -571,6 +719,8 @@ export type Database = {
           customer_id: string | null
           discount: number | null
           final_amount: number
+          fiscal_document_id: string | null
+          fiscal_status: string | null
           id: string
           notes: string | null
           payment_method: string | null
@@ -585,6 +735,8 @@ export type Database = {
           customer_id?: string | null
           discount?: number | null
           final_amount: number
+          fiscal_document_id?: string | null
+          fiscal_status?: string | null
           id?: string
           notes?: string | null
           payment_method?: string | null
@@ -599,6 +751,8 @@ export type Database = {
           customer_id?: string | null
           discount?: number | null
           final_amount?: number
+          fiscal_document_id?: string | null
+          fiscal_status?: string | null
           id?: string
           notes?: string | null
           payment_method?: string | null
@@ -613,6 +767,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
             referencedColumns: ["id"]
           },
           {
@@ -886,6 +1047,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "manager" | "cashier" | "user"
+      sefaz_environment: "production" | "homologation"
+      tax_regime: "simples_nacional" | "lucro_presumido" | "lucro_real"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1014,6 +1177,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "manager", "cashier", "user"],
+      sefaz_environment: ["production", "homologation"],
+      tax_regime: ["simples_nacional", "lucro_presumido", "lucro_real"],
     },
   },
 } as const

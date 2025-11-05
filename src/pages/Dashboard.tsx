@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { DollarSign, Package, ShoppingCart, TrendingUp, Users } from "lucide-react";
+import { DollarSign, Package, ShoppingCart, TrendingUp, Users, Sparkles } from "lucide-react";
 import AIAssistant from "@/components/AIAssistant";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
+import { AIService } from "@/services/aiService";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -15,6 +17,8 @@ export default function Dashboard() {
   });
   const [salesChart, setSalesChart] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [aiInsight, setAiInsight] = useState<string>("");
+  const [loadingInsight, setLoadingInsight] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -85,6 +89,34 @@ export default function Dashboard() {
       .map(([name, qty]) => ({ produto: name, vendas: qty }));
 
     setTopProducts(topProds);
+
+    // Gerar insights de IA
+    await generateAIInsights(salesData, topProds);
+  };
+
+  const generateAIInsights = async (salesData: any[], topProds: any[]) => {
+    setLoadingInsight(true);
+    try {
+      const { data: allProducts } = await supabase
+        .from('products')
+        .select('name, stock_quantity, min_stock');
+      
+      const lowStockProds = allProducts?.filter(p => p.stock_quantity < p.min_stock).slice(0, 5);
+
+      const lowStockNames = lowStockProds?.map(p => p.name) || [];
+
+      const insight = await AIService.generateDashboardInsights({
+        salesData,
+        topProducts: topProds,
+        lowStockProducts: lowStockNames,
+      });
+
+      setAiInsight(insight);
+    } catch (error) {
+      console.error("Erro ao gerar insights:", error);
+    } finally {
+      setLoadingInsight(false);
+    }
   };
 
   const statCards = [
@@ -141,7 +173,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Vendas dos Últimos 7 Dias</CardTitle>
@@ -178,6 +210,27 @@ export default function Dashboard() {
                 <Bar dataKey="vendas" fill="hsl(var(--accent))" />
               </BarChart>
             </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="border-primary/50 bg-gradient-to-br from-primary/5 to-accent/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Insights da IA
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loadingInsight ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ) : (
+              <p className="text-sm leading-relaxed">
+                {aiInsight || "Carregando insights..."}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { DollarSign, Lock, Unlock } from "lucide-react";
+import { DollarSign, Lock, Unlock, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { AIService } from "@/services/aiService";
 
 interface CashRegister {
   id: string;
@@ -21,6 +22,7 @@ interface CashRegister {
   closed_at: string | null;
   status: string;
   notes: string | null;
+  ai_analysis: string | null;
 }
 
 export default function CashControl() {
@@ -81,6 +83,17 @@ export default function CashControl() {
     if (!activeRegister) return;
 
     const { data: { user } } = await supabase.auth.getUser();
+    const difference = parseFloat(closeData.closing_balance) - activeRegister.current_cash_amount;
+
+    // Gerar análise de IA se houver diferença
+    let aiAnalysis = null;
+    if (difference !== 0 && closeData.notes) {
+      try {
+        aiAnalysis = await AIService.analyzeCashDifference(difference, closeData.notes);
+      } catch (error) {
+        console.error("Erro ao gerar análise de IA:", error);
+      }
+    }
 
     const { error } = await supabase
       .from('cash_registers')
@@ -90,6 +103,7 @@ export default function CashControl() {
         closed_at: new Date().toISOString(),
         closed_by: user?.id,
         notes: closeData.notes,
+        ai_analysis: aiAnalysis,
       })
       .eq('id', activeRegister.id);
 
@@ -281,6 +295,12 @@ export default function CashControl() {
                     )}
                     {register.notes && (
                       <p className="text-sm italic mt-2">{register.notes}</p>
+                    )}
+                    {register.ai_analysis && (
+                      <p className="text-sm mt-2 flex items-center gap-1 text-primary">
+                        <Sparkles className="h-3 w-3" />
+                        <span className="font-medium">IA:</span> {register.ai_analysis}
+                      </p>
                     )}
                   </div>
                   <div className="text-right space-y-1">

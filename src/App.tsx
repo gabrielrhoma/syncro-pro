@@ -16,6 +16,7 @@ import Financial from "./pages/Financial";
 import Settings from "./pages/Settings";
 import Suppliers from "./pages/Suppliers";
 import Purchases from "./pages/Purchases";
+import NewPurchaseOrder from "./pages/NewPurchaseOrder";
 import AccountsPayable from "./pages/AccountsPayable";
 import AccountsReceivable from "./pages/AccountsReceivable";
 import Reports from "./pages/Reports";
@@ -26,6 +27,7 @@ import NotFound from "./pages/NotFound";
 import UserManagement from "./pages/UserManagement";
 import Calendar from "./pages/Calendar";
 import CashControl from "./pages/CashControl";
+import FiscalSettings from "./pages/FiscalSettings";
 
 const queryClient = new QueryClient();
 
@@ -74,11 +76,13 @@ const App = () => (
           <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
           <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
           <Route path="/purchases" element={<ProtectedRoute><Purchases /></ProtectedRoute>} />
+          <Route path="/purchases/new" element={<ProtectedRoute><NewPurchaseOrder /></ProtectedRoute>} />
           <Route path="/accounts-payable" element={<ProtectedRoute><AccountsPayable /></ProtectedRoute>} />
           <Route path="/accounts-receivable" element={<ProtectedRoute><AccountsReceivable /></ProtectedRoute>} />
           <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/settings/fiscal" element={<ProtectedRoute><FiscalSettings /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
           <Route path="/cash-control" element={<ProtectedRoute><CashControl /></ProtectedRoute>} />
