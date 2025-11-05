@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { productSchema } from "@/lib/validation";
@@ -27,6 +28,18 @@ interface Category {
   name: string;
 }
 
+interface ProductTaxInfo {
+  id?: string;
+  product_id: string;
+  ncm: string;
+  cfop: string;
+  cest: string;
+  icms_origin: string;
+  icms_tax_situation: string;
+  pis_tax_situation: string;
+  cofins_tax_situation: string;
+}
+
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -40,6 +53,15 @@ export default function Products() {
     stock_quantity: "",
     min_stock: "",
     category_id: "",
+  });
+  const [taxInfoFormData, setTaxInfoFormData] = useState({
+    ncm: "",
+    cfop: "5102",
+    cest: "",
+    icms_origin: "",
+    icms_tax_situation: "",
+    pis_tax_situation: "",
+    cofins_tax_situation: "",
   });
 
   useEffect(() => {
@@ -97,32 +119,41 @@ export default function Products() {
         category_id: formData.category_id || null,
       };
 
+      let productId = editingProduct?.id;
+
       if (editingProduct) {
         const { error } = await supabase
           .from('products')
           .update(productData)
           .eq('id', editingProduct.id);
 
-        if (error) {
-          toast.error("Erro ao atualizar produto");
-        } else {
-          toast.success("Produto atualizado!");
-          setOpen(false);
-          loadProducts();
-          resetForm();
-        }
+        if (error) throw new Error("Erro ao atualizar produto");
       } else {
-        const { error } = await supabase.from('products').insert(productData);
+        const { data, error } = await supabase
+          .from('products')
+          .insert(productData)
+          .select('id')
+          .single();
 
-        if (error) {
-          toast.error("Erro ao criar produto");
-        } else {
-          toast.success("Produto criado!");
-          setOpen(false);
-          loadProducts();
-          resetForm();
-        }
+        if (error || !data) throw new Error("Erro ao criar produto");
+        productId = data.id;
       }
+
+      if (productId) {
+        const { error: taxError } = await supabase
+          .from('product_tax_info')
+          .upsert({
+            product_id: productId,
+            ...taxInfoFormData,
+          });
+
+        if (taxError) throw new Error("Erro ao salvar informações fiscais");
+      }
+
+      toast.success(editingProduct ? "Produto atualizado!" : "Produto criado!");
+      setOpen(false);
+      loadProducts();
+      resetForm();
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -155,20 +186,50 @@ export default function Products() {
       min_stock: "",
       category_id: "",
     });
+    setTaxInfoFormData({
+      ncm: "",
+      cfop: "5102",
+      cest: "",
+      icms_origin: "",
+      icms_tax_situation: "",
+      pis_tax_situation: "",
+      cofins_tax_situation: "",
+    });
     setEditingProduct(null);
   };
 
-  const openEditDialog = (product: Product) => {
+  const openEditDialog = async (product: Product) => {
     setEditingProduct(product);
     setFormData({
       name: product.name,
       sku: product.sku || "",
       sale_price: product.sale_price.toString(),
-      cost_price: "",
+      cost_price: "", // These are not loaded for simplicity
       stock_quantity: product.stock_quantity.toString(),
-      min_stock: "",
+      min_stock: "", // These are not loaded for simplicity
       category_id: product.category_id || "",
     });
+
+    const { data: taxInfo } = await supabase
+      .from('product_tax_info')
+      .select('*')
+      .eq('product_id', product.id)
+      .single();
+
+    if (taxInfo) {
+      setTaxInfoFormData({
+        ncm: taxInfo.ncm || "",
+        cfop: taxInfo.cfop || "5102",
+        cest: taxInfo.cest || "",
+        icms_origin: taxInfo.icms_origin || "",
+        icms_tax_situation: taxInfo.icms_tax_situation || "",
+        pis_tax_situation: taxInfo.pis_tax_situation || "",
+        cofins_tax_situation: taxInfo.cofins_tax_situation || "",
+      });
+    } else {
+      resetForm();
+    }
+
     setOpen(true);
   };
 
@@ -192,92 +253,95 @@ export default function Products() {
                 {editingProduct ? "Editar Produto" : "Novo Produto"}
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    required
-                  />
+            <Tabs defaultValue="general">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="general">Dados Gerais</TabsTrigger>
+                <TabsTrigger value="fiscal">Informações Fiscais</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="general">
+                <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nome *</Label>
+                      <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sku">SKU</Label>
+                      <Input id="sku" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sale_price">Preço Venda *</Label>
+                      <Input id="sale_price" type="number" step="0.01" value={formData.sale_price} onChange={(e) => setFormData({ ...formData, sale_price: e.target.value })} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cost_price">Preço Custo</Label>
+                      <Input id="cost_price" type="number" step="0.01" value={formData.cost_price} onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="stock_quantity">Quantidade</Label>
+                      <Input id="stock_quantity" type="number" value={formData.stock_quantity} onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="min_stock">Estoque Mínimo</Label>
+                      <Input id="min_stock" type="number" value={formData.min_stock} onChange={(e) => setFormData({ ...formData, min_stock: e.target.value })} />
+                    </div>
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="category">Categoria</Label>
+                      <Select value={formData.category_id} onValueChange={(value) => setFormData({ ...formData, category_id: value })}>
+                        <SelectTrigger><SelectValue placeholder="Selecione uma categoria" /></SelectTrigger>
+                        <SelectContent>
+                          {categories.map((cat) => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+                    <Button type="submit">{editingProduct ? "Atualizar" : "Criar"}</Button>
+                  </div>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="fiscal">
+                <div className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ncm">NCM</Label>
+                      <Input id="ncm" value={taxInfoFormData.ncm} onChange={(e) => setTaxInfoFormData({ ...taxInfoFormData, ncm: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cfop">CFOP</Label>
+                      <Input id="cfop" value={taxInfoFormData.cfop} onChange={(e) => setTaxInfoFormData({ ...taxInfoFormData, cfop: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cest">CEST</Label>
+                      <Input id="cest" value={taxInfoFormData.cest} onChange={(e) => setTaxInfoFormData({ ...taxInfoFormData, cest: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="icms_origin">Origem ICMS</Label>
+                      <Input id="icms_origin" value={taxInfoFormData.icms_origin} onChange={(e) => setTaxInfoFormData({ ...taxInfoFormData, icms_origin: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="icms_tax_situation">Situação Tributária ICMS</Label>
+                      <Input id="icms_tax_situation" value={taxInfoFormData.icms_tax_situation} onChange={(e) => setTaxInfoFormData({ ...taxInfoFormData, icms_tax_situation: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="pis_tax_situation">Situação Tributária PIS</Label>
+                      <Input id="pis_tax_situation" value={taxInfoFormData.pis_tax_situation} onChange={(e) => setTaxInfoFormData({ ...taxInfoFormData, pis_tax_situation: e.target.value })} />
+                    </div>
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="cofins_tax_situation">Situação Tributária COFINS</Label>
+                      <Input id="cofins_tax_situation" value={taxInfoFormData.cofins_tax_situation} onChange={(e) => setTaxInfoFormData({ ...taxInfoFormData, cofins_tax_situation: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleSubmit}>{editingProduct ? "Atualizar" : "Criar"}</Button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sku">SKU</Label>
-                  <Input
-                    id="sku"
-                    value={formData.sku}
-                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sale_price">Preço Venda *</Label>
-                  <Input
-                    id="sale_price"
-                    type="number"
-                    step="0.01"
-                    value={formData.sale_price}
-                    onChange={(e) => setFormData({ ...formData, sale_price: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cost_price">Preço Custo</Label>
-                  <Input
-                    id="cost_price"
-                    type="number"
-                    step="0.01"
-                    value={formData.cost_price}
-                    onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="stock_quantity">Quantidade</Label>
-                  <Input
-                    id="stock_quantity"
-                    type="number"
-                    value={formData.stock_quantity}
-                    onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="min_stock">Estoque Mínimo</Label>
-                  <Input
-                    id="min_stock"
-                    type="number"
-                    value={formData.min_stock}
-                    onChange={(e) => setFormData({ ...formData, min_stock: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="category">Categoria</Label>
-                  <Select
-                    value={formData.category_id}
-                    onValueChange={(value) => setFormData({ ...formData, category_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  {editingProduct ? "Atualizar" : "Criar"}
-                </Button>
-              </div>
-            </form>
+              </TabsContent>
+            </Tabs>
           </DialogContent>
         </Dialog>
       </div>
