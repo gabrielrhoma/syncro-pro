@@ -1,32 +1,32 @@
 import { supabase } from "@/integrations/supabase/client";
 
 interface SaleData {
-  id: string;
-  sale_number: string;
-  final_amount: number;
-  payment_method: string;
-  customer_id?: string;
-  items: Array<{
+  sale_id: string;
+  items: {
     product_id: string;
     product_name: string;
     quantity: number;
     unit_price: number;
     subtotal: number;
-  }>;
+  }[];
+  total_amount: number;
+  discount: number;
+  final_amount: number;
+  payment_method: string;
 }
 
 interface EmitNFCeResponse {
   success: boolean;
-  protocol?: string;
-  xml_data?: string;
+  message: string;
+  fiscal_document_id?: string;
+  sefaz_protocol?: string;
   danfe_url?: string;
-  error_message?: string;
 }
 
 export class FiscalApiService {
   /**
    * Emite uma NFC-e para uma venda
-   * Esta é uma implementação de exemplo. Em produção, você deve integrar com
+   * Esta é uma implementação mock. Em produção, você deve integrar com
    * uma API fiscal real (ex: PlugNotas, Focus NFe, etc.)
    */
   static async emitNFCe(saleData: SaleData, customerCpf?: string): Promise<EmitNFCeResponse> {
@@ -40,34 +40,60 @@ export class FiscalApiService {
       if (!settings || !settings.cnpj) {
         return {
           success: false,
-          error_message: "Configurações fiscais não encontradas. Configure em Configurações > Fiscal.",
+          message: "Configurações fiscais não encontradas. Configure em Configurações > Fiscal.",
         };
       }
 
-      // Simular emissão (em produção, chamar API fiscal externa)
+      // MOCK: Simular emissão de NFC-e
       // Em produção, você faria algo como:
       // const response = await fetch('https://api.plugnotas.com.br/nfce', {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
-      //   body: JSON.stringify({ ... dados da nota ... })
+      //   body: JSON.stringify({
+      //     empresa: { cnpj: settings.cnpj },
+      //     cliente: { cpf: customerCpf },
+      //     itens: saleData.items,
+      //     total: saleData.final_amount
+      //   })
       // });
 
-      // Para desenvolvimento/demonstração, retornamos sucesso simulado
       const mockProtocol = `PROT${Date.now()}`;
-      const mockXml = `<?xml version="1.0"?><NFCe><numero>${saleData.sale_number}</numero></NFCe>`;
-      const mockDanfeUrl = `https://example.com/danfe/${saleData.id}`;
+      
+      const mockFiscalDocument = {
+        sale_id: saleData.sale_id,
+        type: 'nfc-e',
+        status: 'authorized',
+        sefaz_protocol: mockProtocol,
+        xml_data: `<xml>Mock NFC-e Data for ${saleData.sale_id}</xml>`,
+        danfe_url: `https://example.com/danfe/${mockProtocol}`,
+      };
+
+      const { data, error } = await supabase
+        .from('fiscal_documents')
+        .insert(mockFiscalDocument)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar documento fiscal:', error);
+        return {
+          success: false,
+          message: 'Erro ao salvar documento fiscal no banco',
+        };
+      }
 
       return {
         success: true,
-        protocol: mockProtocol,
-        xml_data: mockXml,
-        danfe_url: mockDanfeUrl,
+        message: 'NFC-e emitida com sucesso (mock)',
+        fiscal_document_id: data.id,
+        sefaz_protocol: mockProtocol,
+        danfe_url: mockFiscalDocument.danfe_url,
       };
     } catch (error) {
       console.error("Erro ao emitir NFC-e:", error);
       return {
         success: false,
-        error_message: error instanceof Error ? error.message : "Erro desconhecido ao emitir NFC-e",
+        message: error instanceof Error ? error.message : "Erro desconhecido ao emitir NFC-e",
       };
     }
   }
@@ -86,21 +112,23 @@ export class FiscalApiService {
       if (!fiscalDoc) {
         return {
           success: false,
-          error_message: "Documento fiscal não encontrado",
+          message: "Documento fiscal não encontrado",
         };
       }
 
       if (fiscalDoc.status !== 'authorized') {
         return {
           success: false,
-          error_message: "Apenas documentos autorizados podem ser cancelados",
+          message: "Apenas documentos autorizados podem ser cancelados",
         };
       }
 
-      // Em produção, chamar API fiscal para cancelamento
-      // const response = await fetch(`https://api.plugnotas.com.br/nfce/${fiscalDoc.sefaz_protocol}/cancel`, ...);
+      // MOCK: Em produção, chamar API fiscal para cancelamento
+      // const response = await fetch(`https://api.plugnotas.com.br/nfce/${fiscalDoc.sefaz_protocol}/cancel`, {
+      //   method: 'POST',
+      //   body: JSON.stringify({ justificativa: justification })
+      // });
 
-      // Simular cancelamento
       await supabase
         .from('fiscal_documents')
         .update({ status: 'cancelled' })
@@ -108,12 +136,13 @@ export class FiscalApiService {
 
       return {
         success: true,
+        message: 'NFC-e cancelada com sucesso (mock)',
       };
     } catch (error) {
       console.error("Erro ao cancelar NFC-e:", error);
       return {
         success: false,
-        error_message: error instanceof Error ? error.message : "Erro desconhecido ao cancelar NFC-e",
+        message: error instanceof Error ? error.message : "Erro desconhecido ao cancelar NFC-e",
       };
     }
   }

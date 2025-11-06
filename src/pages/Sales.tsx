@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { MoreVertical, FileText, XCircle } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { FiscalApiService } from "@/lib/fiscalApiService";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -15,7 +17,8 @@ interface Sale {
   final_amount: number;
   payment_method: string;
   created_at: string;
-  fiscal_status: 'none' | 'pending' | 'authorized' | 'error' | 'cancelled';
+  fiscal_status: string | null;
+  fiscal_document_id: string | null;
   customers: { name: string } | null;
   fiscal_documents: { danfe_url: string | null } | null;
 }
@@ -71,6 +74,32 @@ export default function Sales() {
     }
   };
 
+  const cancelNFCe = async (sale: Sale) => {
+    if (!sale.fiscal_document_id) return;
+    
+    const justification = prompt("Motivo do cancelamento (mínimo 15 caracteres):");
+    if (!justification || justification.length < 15) {
+      toast.error("Justificativa inválida");
+      return;
+    }
+
+    try {
+      const result = await FiscalApiService.cancelNFCe(sale.fiscal_document_id, justification);
+      if (result.success) {
+        await supabase
+          .from('sales')
+          .update({ fiscal_status: 'cancelled' })
+          .eq('id', sale.id);
+        toast.success("NFC-e cancelada!");
+        loadSales();
+      } else {
+        toast.error("Erro ao cancelar NFC-e");
+      }
+    } catch (error) {
+      toast.error("Erro ao cancelar cupom fiscal");
+    }
+  };
+
   const paymentMethodLabels: Record<string, string> = {
     dinheiro: "Dinheiro",
     cartao_debito: "Cartão de Débito",
@@ -79,7 +108,7 @@ export default function Sales() {
   };
 
   const fiscalStatusLabels: Record<string, string> = {
-    none: "N/A",
+    none: "Sem Fiscal",
     pending: "Pendente",
     authorized: "Autorizada",
     error: "Erro",
@@ -87,11 +116,11 @@ export default function Sales() {
   };
 
   const fiscalStatusVariants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-    none: "secondary",
-    pending: "default",
-    authorized: "outline",
+    none: "outline",
+    pending: "secondary",
+    authorized: "default",
     error: "destructive",
-    cancelled: "secondary",
+    cancelled: "outline",
   };
 
   return (
@@ -142,6 +171,7 @@ export default function Sales() {
                 <TableHead>Valor</TableHead>
                 <TableHead>Status Fiscal</TableHead>
                 <TableHead>Data</TableHead>
+                <TableHead>Status Fiscal</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -161,30 +191,33 @@ export default function Sales() {
                   <TableCell>
                     {format(new Date(sale.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                   </TableCell>
+                  <TableCell>
+                    <Badge variant={fiscalStatusVariants[sale.fiscal_status || 'none']}>
+                      {fiscalStatusLabels[sale.fiscal_status || 'none']}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Abrir menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {sale.fiscal_documents?.danfe_url && (
-                          <DropdownMenuItem asChild>
-                            <a href={sale.fiscal_documents.danfe_url} target="_blank" rel="noopener noreferrer">
+                    {sale.fiscal_status === 'authorized' && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {sale.fiscal_documents?.danfe_url && (
+                            <DropdownMenuItem onClick={() => window.open(sale.fiscal_documents?.danfe_url || '', '_blank')}>
+                              <FileText className="mr-2 h-4 w-4" />
                               Ver DANFE
-                            </a>
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={() => cancelNFCe(sale)} className="text-destructive">
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Cancelar NFC-e
                           </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          onClick={() => setSaleToCancel(sale)}
-                          disabled={sale.fiscal_status !== 'authorized'}
-                        >
-                          Cancelar NFC-e
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
