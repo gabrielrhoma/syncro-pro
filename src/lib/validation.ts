@@ -110,20 +110,3 @@ export const accountsReceivableSchema = z.object({
   customer_id: z.string().uuid().optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notas muito longas').trim().optional().or(z.literal('')),
 });
-
-// Purchase Order Item validation schema
-export const purchaseOrderItemSchema = z.object({
-  product_id: z.string().uuid(),
-  quantity: z.number().int('Quantidade deve ser inteira').positive('Quantidade deve ser positiva').max(100000, 'Quantidade muito alta'),
-  unit_price: z.number().positive('Preço deve ser positivo').min(0.01, 'Preço mínimo: R$ 0,01').max(9999999.99, 'Preço muito alto'),
-  subtotal: z.number().positive('Subtotal deve ser positivo'),
-});
-
-// Purchase Order validation schema
-export const purchaseOrderSchema = z.object({
-  supplier_id: z.string().uuid('Fornecedor é obrigatório'),
-  expected_delivery: z.string().optional().or(z.literal('')),
-  notes: z.string().max(1000, 'Notas muito longas').trim().optional().or(z.literal('')),
-  items: z.array(purchaseOrderItemSchema).min(1, 'Adicione pelo menos um produto'),
-  total_amount: z.number().positive('Total deve ser positivo'),
-});

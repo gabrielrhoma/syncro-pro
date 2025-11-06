@@ -2,12 +2,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MoreVertical, FileText, XCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FiscalApiService } from "@/lib/fiscalApiService";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { MoreHorizontal } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -17,8 +15,7 @@ interface Sale {
   final_amount: number;
   payment_method: string;
   created_at: string;
-  fiscal_status: string | null;
-  fiscal_document_id: string | null;
+  fiscal_status: 'none' | 'pending' | 'authorized' | 'error' | 'cancelled';
   customers: { name: string } | null;
   fiscal_documents: { danfe_url: string | null } | null;
 }
@@ -34,9 +31,44 @@ export default function Sales() {
   const [cancelReason, setCancelReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
+  const [saleToReturn, setSaleToReturn] = useState<Sale | null>(null);
+  const [itemsToReturn, setItemsToReturn] = useState<any[]>([]);
+  const [refundMethod, setRefundMethod] = useState('store_credit');
+  const [isReturning, setIsReturning] = useState(false);
+  const [saleItemsForReturn, setSaleItemsForReturn] = useState<any[]>([]);
+
   useEffect(() => {
     loadSales();
   }, []);
+
+  useEffect(() => {
+    if (saleToReturn) {
+      loadSaleItems(saleToReturn.id);
+    }
+  }, [saleToReturn]);
+
+  const loadSaleItems = async (saleId: string) => {
+    const { data } = await supabase
+      .from('sale_items')
+      .select('*, product:products(name)')
+      .eq('sale_id', saleId);
+    setSaleItemsForReturn(data || []);
+  };
+
+  const handleItemReturnQuantityChange = (productId: string, quantity: number) => {
+    setItemsToReturn(prev => {
+      const existing = prev.find(i => i.product_id === productId);
+      if (quantity > 0) {
+        if (existing) {
+          return prev.map(i => i.product_id === productId ? { ...i, quantity } : i);
+        } else {
+          return [...prev, { product_id: productId, quantity }];
+        }
+      } else {
+        return prev.filter(i => i.product_id !== productId);
+      }
+    });
+  };
 
   const loadSales = async () => {
     const { data } = await supabase
@@ -74,29 +106,31 @@ export default function Sales() {
     }
   };
 
-  const cancelNFCe = async (sale: Sale) => {
-    if (!sale.fiscal_document_id) return;
-    
-    const justification = prompt("Motivo do cancelamento (mínimo 15 caracteres):");
-    if (!justification || justification.length < 15) {
-      toast.error("Justificativa inválida");
+  const handleProcessReturn = async () => {
+    if (itemsToReturn.length === 0) {
+      toast.error("Selecione pelo menos um item para devolver.");
       return;
     }
 
+    setIsReturning(true);
     try {
-      const result = await FiscalApiService.cancelNFCe(sale.fiscal_document_id, justification);
-      if (result.success) {
-        await supabase
-          .from('sales')
-          .update({ fiscal_status: 'cancelled' })
-          .eq('id', sale.id);
-        toast.success("NFC-e cancelada!");
-        loadSales();
-      } else {
-        toast.error("Erro ao cancelar NFC-e");
-      }
-    } catch (error) {
-      toast.error("Erro ao cancelar cupom fiscal");
+      const { error } = await supabase.functions.invoke('process-return', {
+        body: {
+          sale_id: saleToReturn.id,
+          items_to_return: itemsToReturn,
+          refund_method: refundMethod,
+        },
+      });
+
+      if (error) throw new Error(error.message);
+
+      toast.success("Devolução processada com sucesso!");
+      setSaleToReturn(null);
+      setItemsToReturn([]);
+    } catch (error: any) {
+      toast.error(`Erro ao processar devolução: ${error.message}`);
+    } finally {
+      setIsReturning(false);
     }
   };
 
@@ -108,7 +142,7 @@ export default function Sales() {
   };
 
   const fiscalStatusLabels: Record<string, string> = {
-    none: "Sem Fiscal",
+    none: "N/A",
     pending: "Pendente",
     authorized: "Autorizada",
     error: "Erro",
@@ -116,15 +150,59 @@ export default function Sales() {
   };
 
   const fiscalStatusVariants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-    none: "outline",
-    pending: "secondary",
-    authorized: "default",
+    none: "secondary",
+    pending: "default",
+    authorized: "outline",
     error: "destructive",
-    cancelled: "outline",
+    cancelled: "secondary",
   };
 
   return (
     <div className="space-y-6">
+      {/* Modal de Devolução */}
+      <Dialog open={!!saleToReturn} onOpenChange={() => setSaleToReturn(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Processar Devolução da Venda {saleToReturn?.sale_number}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Itens para devolver:</Label>
+              {saleItemsForReturn.map(item => (
+                <div key={item.id} className="flex items-center justify-between">
+                  <span>{item.product.name} (Qtd: {item.quantity})</span>
+                  <Input
+                    type="number"
+                    className="w-24"
+                    max={item.quantity}
+                    min={0}
+                    onChange={(e) => handleItemReturnQuantityChange(item.product_id, parseInt(e.target.value))}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <Label>Método de Reembolso</Label>
+              <Select value={refundMethod} onValueChange={setRefundMethod}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="store_credit">Crédito em Loja</SelectItem>
+                  <SelectItem value="cash">Dinheiro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaleToReturn(null)}>Cancelar</Button>
+            <Button onClick={handleProcessReturn} disabled={isReturning}>
+              {isReturning ? "Processando..." : "Confirmar Devolução"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!saleToCancel} onOpenChange={() => setSaleToCancel(null)}>
         <DialogContent>
           <DialogHeader>
@@ -171,7 +249,6 @@ export default function Sales() {
                 <TableHead>Valor</TableHead>
                 <TableHead>Status Fiscal</TableHead>
                 <TableHead>Data</TableHead>
-                <TableHead>Status Fiscal</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -191,33 +268,33 @@ export default function Sales() {
                   <TableCell>
                     {format(new Date(sale.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={fiscalStatusVariants[sale.fiscal_status || 'none']}>
-                      {fiscalStatusLabels[sale.fiscal_status || 'none']}
-                    </Badge>
-                  </TableCell>
                   <TableCell className="text-right">
-                    {sale.fiscal_status === 'authorized' && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {sale.fiscal_documents?.danfe_url && (
-                            <DropdownMenuItem onClick={() => window.open(sale.fiscal_documents?.danfe_url || '', '_blank')}>
-                              <FileText className="mr-2 h-4 w-4" />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Abrir menu</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {sale.fiscal_documents?.danfe_url && (
+                          <DropdownMenuItem asChild>
+                            <a href={sale.fiscal_documents.danfe_url} target="_blank" rel="noopener noreferrer">
                               Ver DANFE
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => cancelNFCe(sale)} className="text-destructive">
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Cancelar NFC-e
+                            </a>
                           </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => setSaleToCancel(sale)}
+                          disabled={sale.fiscal_status !== 'authorized'}
+                        >
+                          Cancelar NFC-e
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setSaleToReturn(sale)}>
+                          Processar Devolução
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}

@@ -15,6 +15,7 @@ export default function FiscalSettings() {
     cnpj: string;
     state_registration: string;
     tax_regime: "simples_nacional" | "lucro_presumido" | "lucro_real";
+    certificate_password: string;
     certificate_expires_at: string;
     sefaz_environment: "homologation" | "production";
   }>({
@@ -22,6 +23,7 @@ export default function FiscalSettings() {
     cnpj: "",
     state_registration: "",
     tax_regime: "simples_nacional",
+    certificate_password: "",
     certificate_expires_at: "",
     sefaz_environment: "homologation",
   });
@@ -44,6 +46,7 @@ export default function FiscalSettings() {
         cnpj: data.cnpj || "",
         state_registration: data.state_registration || "",
         tax_regime: data.tax_regime || "simples_nacional",
+        certificate_password: "",
         certificate_expires_at: data.certificate_expires_at ? new Date(data.certificate_expires_at).toISOString().split('T')[0] : "",
         sefaz_environment: data.sefaz_environment || "homologation",
       });
@@ -59,6 +62,7 @@ export default function FiscalSettings() {
       cnpj: formData.cnpj,
       state_registration: formData.state_registration,
       tax_regime: formData.tax_regime,
+      certificate_password: formData.certificate_password || null,
       certificate_expires_at: formData.certificate_expires_at || null,
       sefaz_environment: formData.sefaz_environment,
     };
@@ -174,6 +178,17 @@ export default function FiscalSettings() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
+                <Label htmlFor="certificate_password">Senha do Certificado</Label>
+                <Input
+                  id="certificate_password"
+                  type="password"
+                  value={formData.certificate_password}
+                  onChange={(e) => setFormData({ ...formData, certificate_password: e.target.value })}
+                  placeholder="Senha do arquivo .pfx"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="certificate_expires_at">Validade do Certificado</Label>
                 <Input
                   id="certificate_expires_at"
@@ -195,17 +210,6 @@ export default function FiscalSettings() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="rounded-lg border border-warning/50 bg-warning/10 p-4">
-              <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                🔒 Senha do Certificado Digital
-              </h4>
-              <p className="text-sm text-muted-foreground">
-                Por segurança, a senha do certificado digital deve ser configurada como uma variável de ambiente secreta.
-                Entre em contato com o administrador do sistema para configurar a variável <code className="bg-muted px-1 py-0.5 rounded font-mono">FISCAL_CERT_PASSWORD</code> nas configurações do backend.
-              </p>
             </div>
 
             <div className="bg-muted p-4 rounded-lg">
