@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Trash2, Search, ShoppingCart } from "lucide-react";
+import { Trash2, Search, ShoppingCart, QrCode } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { saleSchema } from "@/lib/validation";
 import { z } from "zod";
 import { FiscalApiService } from "@/lib/fiscalApiService";
@@ -21,6 +22,12 @@ interface Product {
 interface CartItem extends Product {
   quantity: number;
   subtotal: number;
+}
+
+interface SaleResult {
+  sale_id: string;
+  fiscal_status: 'authorized' | 'error' | 'pending';
+  danfe_url?: string;
 }
 
 export default function POS() {
@@ -125,20 +132,19 @@ export default function POS() {
         return;
       }
 
-      const totalAmount = calculateTotal();
-      const finalAmount = calculateFinal();
+    setIsFinalizing(true);
 
-      const saleData = {
-        items: cart.map((item) => ({
+    try {
+      const salePayload = {
+        customer_id: customer_id,
+        payment_method: paymentMethod,
+        cart_items: cart.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
           unit_price: item.sale_price,
           subtotal: item.subtotal,
         })),
-        total_amount: totalAmount,
-        discount: discount,
-        final_amount: finalAmount,
-        payment_method: paymentMethod as 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix',
+        cpf: cpf || null,
       };
 
       const validated = saleSchema.parse(saleData);
@@ -181,22 +187,13 @@ export default function POS() {
         return;
       }
 
-      for (const item of cart) {
-        await supabase
-          .from('products')
-          .update({ stock_quantity: item.stock_quantity - item.quantity })
-          .eq('id', item.id);
-      }
+      setSaleResult(data);
 
-      await supabase.from('transactions').insert({
-        type: 'income',
-        category: 'Venda',
-        description: `Venda ${saleNumber}`,
-        amount: validated.final_amount,
-        payment_method: validated.payment_method,
-        sale_id: sale.id,
-        created_by: user.id,
-      });
+      if (data.fiscal_status === 'authorized') {
+        toast.success("Venda finalizada e cupom fiscal emitido!");
+      } else {
+        toast.warning("Venda salva, mas falha ao emitir cupom fiscal.");
+      }
 
       // Tentar emitir NFC-e
       try {
@@ -264,9 +261,45 @@ export default function POS() {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-4">
-        <Card>
+    <>
+      <Dialog open={!!saleResult} onOpenChange={() => setSaleResult(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resultado da Venda</DialogTitle>
+          </DialogHeader>
+          {saleResult?.fiscal_status === 'authorized' ? (
+            <div className="text-center space-y-4">
+              <h3 className="text-lg font-semibold text-green-600">Cupom Fiscal Emitido com Sucesso!</h3>
+              <div className="flex justify-center">
+                <QrCode className="h-32 w-32" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Aponte a câmera para o QR Code para consultar a NFC-e.
+              </p>
+              <Button asChild>
+                <a href={saleResult.danfe_url} target="_blank" rel="noopener noreferrer">
+                  Visualizar DANFE
+                </a>
+              </Button>
+            </div>
+          ) : (
+            <div className="text-center space-y-4">
+              <h3 className="text-lg font-semibold text-red-600">Falha na Emissão do Cupom Fiscal</h3>
+              <p className="text-sm text-muted-foreground">
+                A venda foi salva no sistema, mas ocorreu um erro ao se comunicar com a SEFAZ.
+                Você poderá tentar emitir o cupom novamente no histórico de vendas.
+              </p>
+            </div>
+          )}
+          <div className="flex justify-end pt-4">
+            <Button onClick={() => setSaleResult(null)}>Nova Venda</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
+          <Card>
           <CardHeader>
             <CardTitle>Produtos</CardTitle>
           </CardHeader>
@@ -404,5 +437,6 @@ export default function POS() {
         </Card>
       </div>
     </div>
+    </>
   );
 }

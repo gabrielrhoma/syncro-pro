@@ -23,8 +23,16 @@ interface Sale {
   fiscal_documents: { danfe_url: string | null } | null;
 }
 
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+
 export default function Sales() {
   const [sales, setSales] = useState<Sale[]>([]);
+  const [saleToCancel, setSaleToCancel] = useState<Sale | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     loadSales();
@@ -36,7 +44,34 @@ export default function Sales() {
       .select('*, customers(name), fiscal_documents(danfe_url)')
       .order('created_at', { ascending: false });
 
-    setSales(data || []);
+    if (data) {
+      setSales(data as Sale[]);
+    }
+  };
+
+  const handleCancelNFCe = async () => {
+    if (!saleToCancel || !cancelReason.trim()) {
+      toast.error("A justificativa é obrigatória.");
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      const { error } = await supabase.functions.invoke('cancel-nfce', {
+        body: { sale_id: saleToCancel.id, reason: cancelReason },
+      });
+
+      if (error) throw new Error(error.message);
+
+      toast.success("NFC-e cancelada com sucesso!");
+      loadSales();
+      setSaleToCancel(null);
+      setCancelReason("");
+    } catch (error: any) {
+      toast.error(`Erro ao cancelar NFC-e: ${error.message}`);
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const cancelNFCe = async (sale: Sale) => {
@@ -90,6 +125,34 @@ export default function Sales() {
 
   return (
     <div className="space-y-6">
+      <Dialog open={!!saleToCancel} onOpenChange={() => setSaleToCancel(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar NFC-e</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>
+              Digite o motivo do cancelamento para a venda
+              <strong> {saleToCancel?.sale_number}</strong>.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="cancelReason">Justificativa (mínimo 15 caracteres)</Label>
+              <Input
+                id="cancelReason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaleToCancel(null)}>Voltar</Button>
+            <Button onClick={handleCancelNFCe} disabled={isCancelling}>
+              {isCancelling ? "Cancelando..." : "Confirmar Cancelamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Vendas</h2>
         <p className="text-muted-foreground">Histórico de vendas realizadas</p>
@@ -106,7 +169,7 @@ export default function Sales() {
                 <TableHead>Número</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Valor</TableHead>
-                <TableHead>Pagamento</TableHead>
+                <TableHead>Status Fiscal</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead>Status Fiscal</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -120,7 +183,11 @@ export default function Sales() {
                   <TableCell className="font-semibold text-accent">
                     R$ {Number(sale.final_amount).toFixed(2)}
                   </TableCell>
-                  <TableCell>{paymentMethodLabels[sale.payment_method] || sale.payment_method}</TableCell>
+                  <TableCell>
+                    <Badge variant={fiscalStatusVariants[sale.fiscal_status]}>
+                      {fiscalStatusLabels[sale.fiscal_status]}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     {format(new Date(sale.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                   </TableCell>

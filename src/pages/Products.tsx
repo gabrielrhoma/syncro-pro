@@ -28,6 +28,18 @@ interface Category {
   name: string;
 }
 
+interface ProductTaxInfo {
+  id?: string;
+  product_id: string;
+  ncm: string;
+  cfop: string;
+  cest: string;
+  icms_origin: string;
+  icms_tax_situation: string;
+  pis_tax_situation: string;
+  cofins_tax_situation: string;
+}
+
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -48,6 +60,15 @@ export default function Products() {
     icms_tax_situation: "102",
     pis_tax_situation: "07",
     cofins_tax_situation: "07",
+  });
+  const [taxInfoFormData, setTaxInfoFormData] = useState({
+    ncm: "",
+    cfop: "5102",
+    cest: "",
+    icms_origin: "",
+    icms_tax_situation: "",
+    pis_tax_situation: "",
+    cofins_tax_situation: "",
   });
 
   useEffect(() => {
@@ -105,6 +126,8 @@ export default function Products() {
         category_id: formData.category_id || null,
       };
 
+      let productId = editingProduct?.id;
+
       if (editingProduct) {
         const { error } = await supabase
           .from('products')
@@ -153,6 +176,11 @@ export default function Products() {
           resetForm();
         }
       }
+
+      toast.success(editingProduct ? "Produto atualizado!" : "Produto criado!");
+      setOpen(false);
+      loadProducts();
+      resetForm();
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -192,6 +220,15 @@ export default function Products() {
       pis_tax_situation: "07",
       cofins_tax_situation: "07",
     });
+    setTaxInfoFormData({
+      ncm: "",
+      cfop: "5102",
+      cest: "",
+      icms_origin: "",
+      icms_tax_situation: "",
+      pis_tax_situation: "",
+      cofins_tax_situation: "",
+    });
     setEditingProduct(null);
   };
 
@@ -209,9 +246,9 @@ export default function Products() {
       name: product.name,
       sku: product.sku || "",
       sale_price: product.sale_price.toString(),
-      cost_price: "",
+      cost_price: "", // These are not loaded for simplicity
       stock_quantity: product.stock_quantity.toString(),
-      min_stock: "",
+      min_stock: "", // These are not loaded for simplicity
       category_id: product.category_id || "",
       ncm: taxInfo?.ncm || "",
       cfop: taxInfo?.cfop || "5102",
@@ -221,6 +258,27 @@ export default function Products() {
       pis_tax_situation: taxInfo?.pis_tax_situation || "07",
       cofins_tax_situation: taxInfo?.cofins_tax_situation || "07",
     });
+
+    const { data: taxInfo } = await supabase
+      .from('product_tax_info')
+      .select('*')
+      .eq('product_id', product.id)
+      .single();
+
+    if (taxInfo) {
+      setTaxInfoFormData({
+        ncm: taxInfo.ncm || "",
+        cfop: taxInfo.cfop || "5102",
+        cest: taxInfo.cest || "",
+        icms_origin: taxInfo.icms_origin || "",
+        icms_tax_situation: taxInfo.icms_tax_situation || "",
+        pis_tax_situation: taxInfo.pis_tax_situation || "",
+        cofins_tax_situation: taxInfo.cofins_tax_situation || "",
+      });
+    } else {
+      resetForm();
+    }
+
     setOpen(true);
   };
 
