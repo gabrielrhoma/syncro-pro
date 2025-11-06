@@ -29,17 +29,16 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    
-    if (authError || !user) {
-      console.error('Authentication error:', authError);
-      return new Response(
-        JSON.stringify({ error: 'Invalid authentication token' }), 
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Permite chamadas de serviço (server-to-server) sem um usuário
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (authHeader !== `Bearer ${serviceRoleKey}`) {
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Invalid authentication token' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
-
-    console.log('Authenticated user:', user.id);
 
     const { messages } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
