@@ -26,45 +26,33 @@ serve(async (req) => {
       });
     }
 
-    const { sale_id, reason } = await req.json();
+    const { store_id, date_from, date_to } = await req.json();
 
-    if (!sale_id || !reason) {
-      return new Response(JSON.stringify({ error: 'Sale ID and reason are required' }), {
+    if (!store_id || !date_from || !date_to) {
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Primeiro, chama a função de produção para cancelar na API fiscal
-    const { error: fiscalError } = await supabaseClient.functions.invoke('cancel-nfce-production', {
-      body: { sale_id, reason }, // Supondo que a função precise do sale_id
+    const { data, error } = await supabaseClient.rpc('get_reports_data_logic', {
+      p_user_id: user.id,
+      p_store_id: store_id,
+      p_date_from: date_from,
+      p_date_to: date_to,
     });
 
-    if (fiscalError) {
-      throw new Error(`Erro na API Fiscal: ${fiscalError.message}`);
-    }
-
-    // Se o cancelamento fiscal foi bem-sucedido, atualiza o banco de dados
-    const { error: dbError } = await supabaseClient.rpc('cancel_nfce', {
-    const { error } = await supabaseClient.rpc('cancel_nfce', {
-      p_sale_id: sale_id,
-      p_reason: reason,
-    });
-
-    if (dbError) {
-      // Isso indica uma inconsistência que pode precisar de tratamento manual
-      throw new Error(`Cancelado na API fiscal, mas falhou ao atualizar o banco de dados: ${dbError.message}`);
     if (error) {
       throw new Error(error.message);
     }
 
-    return new Response(JSON.stringify({ message: 'NFC-e cancelada com sucesso.' }), {
+    return new Response(JSON.stringify(data), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (e) {
-    console.error('Error cancelling NFC-e:', e);
+    console.error('Error getting reports data:', e);
     return new Response(JSON.stringify({ error: e.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

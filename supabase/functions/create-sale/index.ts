@@ -28,11 +28,51 @@ serve(async (req) => {
 
     const saleData = await req.json();
 
+    if (!saleData.store_id) {
+      return new Response(JSON.stringify({ error: 'Store ID is required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { data: saleCreationData, error: creationError } = await supabaseClient.rpc('create_sale_and_emit_nfce', {
     const { data, error } = await supabaseClient.rpc('create_sale_and_emit_nfce', {
       p_user_id: user.id,
       p_customer_id: saleData.customer_id,
       p_payment_method: saleData.payment_method,
       p_cart_items: saleData.cart_items,
+      p_cpf: saleData.cpf,
+      p_store_id: saleData.store_id,
+      p_contingency: saleData.contingency || false
+    });
+
+    if (creationError) throw new Error(creationError.message);
+
+    if (saleData.contingency) {
+      return new Response(JSON.stringify(saleCreationData), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    try {
+      const { data: fiscalData, error: fiscalError } = await supabaseClient.functions.invoke('emit-nfce-production', {
+        body: { saleData }, // Passar os dados necessários
+      });
+
+      if (fiscalError) throw fiscalError;
+
+      await supabaseClient.from('sales').update({ fiscal_status: 'authorized', fiscal_document_id: fiscalData.id }).eq('id', saleCreationData.sale_id);
+      return new Response(JSON.stringify({ ...saleCreationData, fiscal_status: 'authorized' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+
+    } catch (e) {
+      await supabaseClient.from('sales').update({ fiscal_status: 'error' }).eq('id', saleCreationData.sale_id);
+      // Opcional: registrar a mensagem de erro em `fiscal_documents`
+      return new Response(JSON.stringify({ ...saleCreationData, fiscal_status: 'error', error_message: e.message }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
       p_cpf: saleData.cpf
     });
 
