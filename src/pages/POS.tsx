@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Trash2, Search, ShoppingCart } from "lucide-react";
 import { saleSchema } from "@/lib/validation";
 import { z } from "zod";
+import { FiscalApiService } from "@/lib/fiscalApiService";
 
 interface Product {
   id: string;
@@ -28,6 +29,8 @@ export default function POS() {
   const [searchTerm, setSearchTerm] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("dinheiro");
   const [discount, setDiscount] = useState(0);
+  const [customerCpf, setCustomerCpf] = useState("");
+  const [emittingFiscal, setEmittingFiscal] = useState(false);
 
   useEffect(() => {
     loadProducts();
@@ -114,9 +117,11 @@ export default function POS() {
 
   const finalizeSale = async () => {
     try {
+      setEmittingFiscal(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error("Usuário não autenticado");
+        setEmittingFiscal(false);
         return;
       }
 
@@ -149,12 +154,14 @@ export default function POS() {
           final_amount: validated.final_amount,
           payment_method: validated.payment_method,
           cashier_id: user.id,
+          fiscal_status: 'none',
         })
         .select()
         .single();
 
       if (saleError) {
         toast.error("Erro ao criar venda");
+        setEmittingFiscal(false);
         return;
       }
 
@@ -170,6 +177,7 @@ export default function POS() {
 
       if (itemsError) {
         toast.error("Erro ao registrar itens");
+        setEmittingFiscal(false);
         return;
       }
 
@@ -190,16 +198,64 @@ export default function POS() {
         created_by: user.id,
       });
 
-      toast.success("Venda finalizada!");
+      // Tentar emitir NFC-e
+      try {
+        toast.info("Emitindo cupom fiscal...");
+        const fiscalResult = await FiscalApiService.emitNFCe(
+          {
+            sale_id: sale.id,
+            items: cart.map(item => ({
+              product_id: item.id,
+              product_name: item.name,
+              quantity: item.quantity,
+              unit_price: item.sale_price,
+              subtotal: item.subtotal,
+            })),
+            total_amount: validated.total_amount,
+            discount: validated.discount,
+            final_amount: validated.final_amount,
+            payment_method: validated.payment_method,
+          },
+          customerCpf
+        );
+
+        if (fiscalResult.success) {
+          await supabase
+            .from('sales')
+            .update({ 
+              fiscal_status: 'authorized',
+              fiscal_document_id: fiscalResult.fiscal_document_id 
+            })
+            .eq('id', sale.id);
+          toast.success("Venda finalizada e cupom emitido!");
+        } else {
+          await supabase
+            .from('sales')
+            .update({ fiscal_status: 'error' })
+            .eq('id', sale.id);
+          toast.warning("Venda salva, mas erro ao emitir cupom fiscal");
+        }
+      } catch (fiscalError) {
+        await supabase
+          .from('sales')
+          .update({ fiscal_status: 'pending' })
+          .eq('id', sale.id);
+        toast.warning("Venda salva, cupom fiscal em contingência");
+      }
+
       setCart([]);
       setDiscount(0);
+      setCustomerCpf("");
+      setEmittingFiscal(false);
       loadProducts();
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
+        setEmittingFiscal(false);
         return;
       }
       toast.error("Erro ao processar venda");
+      setEmittingFiscal(false);
     }
   };
 
@@ -314,6 +370,15 @@ export default function POS() {
                     </Select>
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">CPF na Nota (opcional)</label>
+                    <Input
+                      placeholder="000.000.000-00"
+                      value={customerCpf}
+                      onChange={(e) => setCustomerCpf(e.target.value)}
+                    />
+                  </div>
+
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
@@ -329,8 +394,8 @@ export default function POS() {
                     </div>
                   </div>
 
-                  <Button className="w-full" onClick={finalizeSale}>
-                    Finalizar Venda
+                  <Button className="w-full" onClick={finalizeSale} disabled={emittingFiscal}>
+                    {emittingFiscal ? "Processando..." : "Finalizar Venda"}
                   </Button>
                 </div>
               </>
