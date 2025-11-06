@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Trash2, Search, ShoppingCart } from "lucide-react";
+import { Trash2, Search, ShoppingCart, QrCode } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { saleSchema } from "@/lib/validation";
 import { z } from "zod";
 
@@ -22,12 +23,22 @@ interface CartItem extends Product {
   subtotal: number;
 }
 
+interface SaleResult {
+  sale_id: string;
+  fiscal_status: 'authorized' | 'error' | 'pending';
+  danfe_url?: string;
+}
+
 export default function POS() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("dinheiro");
   const [discount, setDiscount] = useState(0);
+  const [cpf, setCpf] = useState("");
+  const [customer_id, setCustomerId] = useState<string | null>(null);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
 
   useEffect(() => {
     loadProducts();
@@ -113,93 +124,58 @@ export default function POS() {
   };
 
   const finalizeSale = async () => {
+    if (cart.length === 0) {
+      toast.error("O carrinho está vazio.");
+      return;
+    }
+
+    if (paymentMethod === 'a_prazo' && !customer_id) {
+      toast.error("Selecione um cliente para vendas a prazo.");
+      return;
+    }
+
+    setIsFinalizing(true);
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Usuário não autenticado");
-        return;
-      }
-
-      const totalAmount = calculateTotal();
-      const finalAmount = calculateFinal();
-
-      const saleData = {
-        items: cart.map((item) => ({
+      const salePayload = {
+        customer_id: customer_id,
+        payment_method: paymentMethod,
+        cart_items: cart.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
           unit_price: item.sale_price,
           subtotal: item.subtotal,
         })),
-        total_amount: totalAmount,
-        discount: discount,
-        final_amount: finalAmount,
-        payment_method: paymentMethod as 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix',
+        cpf: cpf || null,
       };
 
-      const validated = saleSchema.parse(saleData);
-
-      const saleNumber = `VENDA-${Date.now()}`;
-
-      const { data: sale, error: saleError } = await supabase
-        .from('sales')
-        .insert({
-          sale_number: saleNumber,
-          total_amount: validated.total_amount,
-          discount: validated.discount,
-          final_amount: validated.final_amount,
-          payment_method: validated.payment_method,
-          cashier_id: user.id,
-        })
-        .select()
-        .single();
-
-      if (saleError) {
-        toast.error("Erro ao criar venda");
-        return;
-      }
-
-      const saleItems = validated.items.map((item) => ({
-        sale_id: sale.id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        subtotal: item.subtotal,
-      }));
-
-      const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
-
-      if (itemsError) {
-        toast.error("Erro ao registrar itens");
-        return;
-      }
-
-      for (const item of cart) {
-        await supabase
-          .from('products')
-          .update({ stock_quantity: item.stock_quantity - item.quantity })
-          .eq('id', item.id);
-      }
-
-      await supabase.from('transactions').insert({
-        type: 'income',
-        category: 'Venda',
-        description: `Venda ${saleNumber}`,
-        amount: validated.final_amount,
-        payment_method: validated.payment_method,
-        sale_id: sale.id,
-        created_by: user.id,
+      const { data, error } = await supabase.functions.invoke('create-sale', {
+        body: salePayload,
       });
 
-      toast.success("Venda finalizada!");
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setSaleResult(data);
+
+      if (data.fiscal_status === 'authorized') {
+        toast.success("Venda finalizada e cupom fiscal emitido!");
+      } else {
+        toast.warning("Venda salva, mas falha ao emitir cupom fiscal.");
+      }
+
+      // Reset state
       setCart([]);
       setDiscount(0);
+      setCpf("");
+      setCustomerId(null);
       loadProducts();
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
-        return;
-      }
-      toast.error("Erro ao processar venda");
+
+    } catch (error: any) {
+      toast.error(`Erro ao finalizar venda: ${error.message}`);
+    } finally {
+      setIsFinalizing(false);
     }
   };
 
@@ -208,9 +184,45 @@ export default function POS() {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-4">
-        <Card>
+    <>
+      <Dialog open={!!saleResult} onOpenChange={() => setSaleResult(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resultado da Venda</DialogTitle>
+          </DialogHeader>
+          {saleResult?.fiscal_status === 'authorized' ? (
+            <div className="text-center space-y-4">
+              <h3 className="text-lg font-semibold text-green-600">Cupom Fiscal Emitido com Sucesso!</h3>
+              <div className="flex justify-center">
+                <QrCode className="h-32 w-32" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Aponte a câmera para o QR Code para consultar a NFC-e.
+              </p>
+              <Button asChild>
+                <a href={saleResult.danfe_url} target="_blank" rel="noopener noreferrer">
+                  Visualizar DANFE
+                </a>
+              </Button>
+            </div>
+          ) : (
+            <div className="text-center space-y-4">
+              <h3 className="text-lg font-semibold text-red-600">Falha na Emissão do Cupom Fiscal</h3>
+              <p className="text-sm text-muted-foreground">
+                A venda foi salva no sistema, mas ocorreu um erro ao se comunicar com a SEFAZ.
+                Você poderá tentar emitir o cupom novamente no histórico de vendas.
+              </p>
+            </div>
+          )}
+          <div className="flex justify-end pt-4">
+            <Button onClick={() => setSaleResult(null)}>Nova Venda</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
+          <Card>
           <CardHeader>
             <CardTitle>Produtos</CardTitle>
           </CardHeader>
@@ -310,6 +322,7 @@ export default function POS() {
                         <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
                         <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
                         <SelectItem value="pix">PIX</SelectItem>
+                        <SelectItem value="a_prazo">A Prazo (Fiado)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -329,8 +342,16 @@ export default function POS() {
                     </div>
                   </div>
 
-                  <Button className="w-full" onClick={finalizeSale}>
-                    Finalizar Venda
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">CPF na Nota</label>
+                    <Input
+                      placeholder="CPF do cliente (opcional)"
+                      value={cpf}
+                      onChange={(e) => setCpf(e.target.value)}
+                    />
+                  </div>
+                  <Button className="w-full" onClick={finalizeSale} disabled={isFinalizing}>
+                    {isFinalizing ? "Finalizando..." : "Finalizar Venda"}
                   </Button>
                 </div>
               </>
@@ -339,5 +360,6 @@ export default function POS() {
         </Card>
       </div>
     </div>
+    </>
   );
 }
