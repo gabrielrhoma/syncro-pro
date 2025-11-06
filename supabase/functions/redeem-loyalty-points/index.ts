@@ -26,42 +26,33 @@ serve(async (req) => {
       });
     }
 
-    const { sale_id, reason } = await req.json();
+    const { customer_id, points_to_redeem, store_id } = await req.json();
 
-    if (!sale_id || !reason) {
-      return new Response(JSON.stringify({ error: 'Sale ID and reason are required' }), {
+    if (!customer_id || !points_to_redeem || !store_id) {
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Primeiro, chama a função de produção para cancelar na API fiscal
-    const { error: fiscalError } = await supabaseClient.functions.invoke('cancel-nfce-production', {
-      body: { sale_id, reason }, // Supondo que a função precise do sale_id
+    const { data, error } = await supabaseClient.rpc('redeem_loyalty_points_logic', {
+      p_user_id: user.id,
+      p_customer_id: customer_id,
+      p_points_to_redeem: points_to_redeem,
+      p_store_id: store_id,
     });
 
-    if (fiscalError) {
-      throw new Error(`Erro na API Fiscal: ${fiscalError.message}`);
+    if (error) {
+      throw new Error(error.message);
     }
 
-    // Se o cancelamento fiscal foi bem-sucedido, atualiza o banco de dados
-    const { error: dbError } = await supabaseClient.rpc('cancel_nfce', {
-      p_sale_id: sale_id,
-      p_reason: reason,
-    });
-
-    if (dbError) {
-      // Isso indica uma inconsistência que pode precisar de tratamento manual
-      throw new Error(`Cancelado na API fiscal, mas falhou ao atualizar o banco de dados: ${dbError.message}`);
-    }
-
-    return new Response(JSON.stringify({ message: 'NFC-e cancelada com sucesso.' }), {
+    return new Response(JSON.stringify(data), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (e) {
-    console.error('Error cancelling NFC-e:', e);
+    console.error('Error redeeming loyalty points:', e);
     return new Response(JSON.stringify({ error: e.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

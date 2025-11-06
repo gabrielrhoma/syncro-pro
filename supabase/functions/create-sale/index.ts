@@ -36,7 +36,6 @@ serve(async (req) => {
     }
 
     const { data: saleCreationData, error: creationError } = await supabaseClient.rpc('create_sale_and_emit_nfce', {
-    const { data, error } = await supabaseClient.rpc('create_sale_and_emit_nfce', {
       p_user_id: user.id,
       p_customer_id: saleData.customer_id,
       p_payment_method: saleData.payment_method,
@@ -73,21 +72,6 @@ serve(async (req) => {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-      p_cpf: saleData.cpf
-    });
-
-    if (error) {
-      console.error('Error creating sale:', error);
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
 
   } catch (e) {
     console.error('Unexpected error:', e);
