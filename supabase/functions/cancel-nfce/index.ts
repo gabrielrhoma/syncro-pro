@@ -46,6 +46,7 @@ serve(async (req) => {
 
     // Se o cancelamento fiscal foi bem-sucedido, atualiza o banco de dados
     const { error: dbError } = await supabaseClient.rpc('cancel_nfce', {
+    const { error } = await supabaseClient.rpc('cancel_nfce', {
       p_sale_id: sale_id,
       p_reason: reason,
     });
@@ -53,6 +54,8 @@ serve(async (req) => {
     if (dbError) {
       // Isso indica uma inconsistência que pode precisar de tratamento manual
       throw new Error(`Cancelado na API fiscal, mas falhou ao atualizar o banco de dados: ${dbError.message}`);
+    if (error) {
+      throw new Error(error.message);
     }
 
     return new Response(JSON.stringify({ message: 'NFC-e cancelada com sucesso.' }), {
