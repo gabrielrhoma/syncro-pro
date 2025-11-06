@@ -51,6 +51,8 @@ export default function Purchases() {
   const [expectedDelivery, setExpectedDelivery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const { toast } = useToast();
+  const [isReceiving, setIsReceiving] = useState(false);
+  const [confirmReceiveOrder, setConfirmReceiveOrder] = useState<PurchaseOrder | null>(null);
 
   useEffect(() => {
     loadOrders();
@@ -193,34 +195,36 @@ export default function Purchases() {
     loadOrders();
   };
 
-  const receiveOrder = async (orderId: string) => {
-    if (!confirm("Confirma o recebimento desta ordem de compra?")) return;
+  const handleReceiveOrder = async () => {
+    if (!confirmReceiveOrder) return;
+    setIsReceiving(true);
 
-    // Buscar itens da ordem
-    const { data: items } = await supabase
-      .from('purchase_order_items')
-      .select('*, products(stock_quantity)')
-      .eq('purchase_order_id', orderId);
+    try {
+      const { error } = await supabase.functions.invoke(
+        `receive-purchase-order/${confirmReceiveOrder.id}`,
+        { method: 'POST' }
+      );
 
-    if (!items) return;
+      if (error) {
+        throw new Error(error.message);
+      }
 
-    // Atualizar estoque de cada produto
-    for (const item of items) {
-      const newStock = (item.products?.stock_quantity || 0) + item.quantity;
-      await supabase
-        .from('products')
-        .update({ stock_quantity: newStock })
-        .eq('id', item.product_id);
+      toast({
+        title: "Sucesso!",
+        description: "Estoque atualizado e conta a pagar gerada!",
+      });
+
+      loadOrders();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao receber mercadoria",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsReceiving(false);
+      setConfirmReceiveOrder(null);
     }
-
-    // Atualizar status da ordem
-    await supabase
-      .from('purchase_orders')
-      .update({ status: 'received', received_date: new Date().toISOString() })
-      .eq('id', orderId);
-
-    toast({ title: "Ordem recebida e estoque atualizado!" });
-    loadOrders();
   };
 
   const statusLabels: Record<string, string> = {
@@ -239,6 +243,33 @@ export default function Purchases() {
 
   return (
     <div className="space-y-6">
+      <Dialog open={!!confirmReceiveOrder} onOpenChange={() => setConfirmReceiveOrder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Recebimento</DialogTitle>
+          </DialogHeader>
+          <div>
+            <p>
+              Você confirma o recebimento da ordem de compra
+              <strong className="mx-1">{confirmReceiveOrder?.order_number}</strong>?
+              Esta ação atualizará o estoque e gerará a conta a pagar correspondente.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmReceiveOrder(null)}
+              disabled={isReceiving}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleReceiveOrder} disabled={isReceiving}>
+              {isReceiving ? "Processando..." : "Confirmar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Compras</h2>
@@ -406,14 +437,14 @@ export default function Purchases() {
                     }
                   </TableCell>
                   <TableCell className="text-right">
-                    {order.status === 'pending' && (
+                    {order.status === 'approved' && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => receiveOrder(order.id)}
+                        onClick={() => setConfirmReceiveOrder(order)}
                       >
                         <Package className="mr-2 h-4 w-4" />
-                        Receber
+                        Receber Mercadoria
                       </Button>
                     )}
                   </TableCell>
