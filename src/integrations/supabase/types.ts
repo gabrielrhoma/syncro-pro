@@ -265,7 +265,6 @@ export type Database = {
       company_settings: {
         Row: {
           certificate_expires_at: string | null
-          certificate_password: string | null
           cnpj: string | null
           company_name: string | null
           created_at: string | null
@@ -280,7 +279,6 @@ export type Database = {
         }
         Insert: {
           certificate_expires_at?: string | null
-          certificate_password?: string | null
           cnpj?: string | null
           company_name?: string | null
           created_at?: string | null
@@ -295,7 +293,6 @@ export type Database = {
         }
         Update: {
           certificate_expires_at?: string | null
-          certificate_password?: string | null
           cnpj?: string | null
           company_name?: string | null
           created_at?: string | null
