@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { purchaseOrderSchema } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -103,14 +102,6 @@ export default function NewPurchaseOrder() {
   };
 
   const updateUnitPrice = (productId: string, price: number) => {
-    if (price < 0.01) {
-      toast.error('Preço deve ser positivo');
-      return;
-    }
-    if (price > 9999999.99) {
-      toast.error('Preço muito alto');
-      return;
-    }
     setCart(cart.map(item =>
       item.id === productId
         ? { ...item, unit_price: price, subtotal: price * item.quantity }
@@ -127,29 +118,20 @@ export default function NewPurchaseOrder() {
   };
 
   const savePurchaseOrder = async (status: 'draft' | 'sent') => {
-    const totalAmount = calculateTotal();
+    if (!formData.supplier_id) {
+      toast.error("Selecione um fornecedor");
+      return;
+    }
 
-    try {
-      // Validate purchase order data
-      purchaseOrderSchema.parse({
-        supplier_id: formData.supplier_id,
-        expected_delivery: formData.expected_delivery,
-        notes: formData.notes,
-        items: cart,
-        total_amount: totalAmount,
-      });
-    } catch (error: any) {
-      if (error.errors) {
-        toast.error(error.errors[0].message);
-      } else {
-        toast.error("Erro ao validar dados do pedido");
-      }
+    if (cart.length === 0) {
+      toast.error("Adicione pelo menos um produto");
       return;
     }
 
     const { data: { user } } = await supabase.auth.getUser();
     
     const orderNumber = `PC-${Date.now()}`;
+    const totalAmount = calculateTotal();
 
     const { data: order, error: orderError } = await supabase
       .from('purchase_orders')
