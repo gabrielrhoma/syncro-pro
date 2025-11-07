@@ -1,6 +1,7 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ReactNode } from "react";
+import { StoreSelector } from "@/components/StoreSelector";
 
 interface LayoutProps {
   children: ReactNode;
@@ -15,6 +16,9 @@ export function Layout({ children }: LayoutProps) {
           <header className="h-16 border-b bg-card flex items-center px-6 gap-4">
             <SidebarTrigger />
             <h1 className="text-lg font-semibold">Sistema ERP/PDV/CRM</h1>
+            <div className="ml-auto">
+              <StoreSelector />
+            </div>
           </header>
           <div className="flex-1 p-6">
             {children}

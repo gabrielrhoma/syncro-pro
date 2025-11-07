@@ -7,6 +7,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { Layout } from "@/components/Layout";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { StoreProvider } from "@/contexts/StoreContext";
+import { RoleProtectedRoute } from "@/components/RoleProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import POS from "./pages/POS";
@@ -28,6 +31,16 @@ import UserManagement from "./pages/UserManagement";
 import Calendar from "./pages/Calendar";
 import CashControl from "./pages/CashControl";
 import FiscalSettings from "./pages/FiscalSettings";
+import Manufacturing from "./pages/Manufacturing";
+import Promotions from "./pages/Promotions";
+import Coupons from "./pages/Coupons";
+import PriceLists from "./pages/PriceLists";
+import BankReconciliation from "./pages/BankReconciliation";
+import AuditLog from "./pages/AuditLog";
+import Alerts from "./pages/Alerts";
+import InventoryAdjustments from "./pages/InventoryAdjustments";
+import StoreCredit from "./pages/StoreCredit";
+import SalesCommissions from "./pages/SalesCommissions";
 
 const queryClient = new QueryClient();
 
@@ -61,36 +74,51 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/recuperar-senha" element={<RecoverPassword />} />
-          <Route path="/redefinir-senha" element={<ResetPassword />} />
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-          <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
-          <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
-          <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
-          <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
-          <Route path="/purchases" element={<ProtectedRoute><Purchases /></ProtectedRoute>} />
-          <Route path="/purchases/new" element={<ProtectedRoute><NewPurchaseOrder /></ProtectedRoute>} />
-          <Route path="/accounts-payable" element={<ProtectedRoute><AccountsPayable /></ProtectedRoute>} />
-          <Route path="/accounts-receivable" element={<ProtectedRoute><AccountsReceivable /></ProtectedRoute>} />
-          <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
-          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/settings/fiscal" element={<ProtectedRoute><FiscalSettings /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
-          <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
-          <Route path="/cash-control" element={<ProtectedRoute><CashControl /></ProtectedRoute>} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <AuthProvider>
+      <StoreProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/recuperar-senha" element={<RecoverPassword />} />
+              <Route path="/redefinir-senha" element={<ResetPassword />} />
+              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+              <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+              <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
+              <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
+              <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
+              <Route path="/purchases" element={<ProtectedRoute><Purchases /></ProtectedRoute>} />
+              <Route path="/purchases/new" element={<ProtectedRoute><NewPurchaseOrder /></ProtectedRoute>} />
+              <Route path="/accounts-payable" element={<ProtectedRoute><AccountsPayable /></ProtectedRoute>} />
+              <Route path="/accounts-receivable" element={<ProtectedRoute><AccountsReceivable /></ProtectedRoute>} />
+              <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/settings/fiscal" element={<ProtectedRoute><FiscalSettings /></ProtectedRoute>} />
+              <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
+              <Route path="/cash-control" element={<ProtectedRoute><CashControl /></ProtectedRoute>} />
+              <Route path="/inventory/adjustments" element={<ProtectedRoute><InventoryAdjustments /></ProtectedRoute>} />
+              <Route path="/inventory/manufacturing" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'manager']}><Manufacturing /></RoleProtectedRoute></ProtectedRoute>} />
+              <Route path="/settings/promotions" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'manager']}><Promotions /></RoleProtectedRoute></ProtectedRoute>} />
+              <Route path="/settings/coupons" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'manager']}><Coupons /></RoleProtectedRoute></ProtectedRoute>} />
+              <Route path="/settings/price-lists" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'manager']}><PriceLists /></RoleProtectedRoute></ProtectedRoute>} />
+              <Route path="/financial/reconciliation" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><BankReconciliation /></RoleProtectedRoute></ProtectedRoute>} />
+              <Route path="/settings/audit-log" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><AuditLog /></RoleProtectedRoute></ProtectedRoute>} />
+              <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
+              <Route path="/sales/commissions" element={<ProtectedRoute><SalesCommissions /></ProtectedRoute>} />
+              <Route path="/customers/store-credit" element={<ProtectedRoute><StoreCredit /></ProtectedRoute>} />
+              <Route path="/users" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><UserManagement /></RoleProtectedRoute></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </StoreProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
+
 
 export default App;
