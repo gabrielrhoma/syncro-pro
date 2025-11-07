@@ -91,13 +91,7 @@ export default function Products() {
   useEffect(() => {
     loadProducts();
     loadCategories();
-    loadAttributes();
   }, []);
-
-  const loadAttributes = async () => {
-    const { data } = await supabase.from('product_attributes').select('*');
-    setAttributes(data || []);
-  };
 
   const loadProducts = async () => {
     const { data, error } = await supabase
@@ -133,7 +127,7 @@ export default function Products() {
     const valueArrays = attributes.map(attr => productAttributes[attr]);
 
     // Simple cartesian product function
-    const cartesian = (...a: string[][]) => a.reduce((a, b) => a.flatMap(d => b.map(e => [d, e].flat())));
+    const cartesian = (...a: string[][]) => a.reduce((acc, b) => acc.flatMap((d: string | string[]) => b.map(e => [...(Array.isArray(d) ? d : [d]), e])), [[]] as string[][]);
 
     const combinations = cartesian(...valueArrays);
 
@@ -218,49 +212,8 @@ export default function Products() {
           .upsert({ product_id: productId, ...taxInfoFormData });
 
         if (taxError) throw new Error("Erro ao salvar informações fiscais");
-
-        // Deletar variações antigas para recriar
-        await supabase.from('product_variations').delete().eq('product_id', productId);
-
-        for (const variation of variations) {
-          const { data: variationData, error: variationError } = await supabase
-            .from('product_variations')
-            .insert({
-              product_id: productId,
-              sku: variation.sku,
-              stock_quantity: variation.stock_quantity,
-              sale_price: variation.sale_price,
-              cost_price: variation.cost_price,
-            })
-            .select('id')
-            .single();
-
-          if (variationError) throw new Error("Erro ao salvar variação");
-
-          if (variationError) throw new Error("Erro ao salvar variação");
-
-          for (const v of variation.values) {
-            const attribute = attributes.find(a => a.name === v.attribute);
-            if (!attribute) continue;
-
-            // Upsert attribute value to get its ID
-            const { data: valueData, error: valueError } = await supabase
-              .from('attribute_values')
-              .upsert({ attribute_id: attribute.id, value: v.value }, { onConflict: 'attribute_id, value' })
-              .select('id')
-              .single();
-
-            if (valueError) throw new Error("Erro ao salvar valor de atributo");
-
-            // Link variation to the attribute value
-            await supabase.from('product_variation_values').insert({
-              variation_id: variationData.id,
-              value_id: valueData.id,
-            });
-          }
-        }
       }
-
+      
       toast.success(editingProduct ? "Produto atualizado!" : "Produto criado!");
       setOpen(false);
       loadProducts();

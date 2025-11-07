@@ -59,6 +59,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true, imported_count: orders.length }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

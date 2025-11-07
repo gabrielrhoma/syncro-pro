@@ -24,6 +24,7 @@ serve(async (req) => {
 
     return new Response(labelsHtml, { headers: { 'Content-Type': 'text/html' } });
   } catch (e) {
-    return new Response(e.message, { status: 500 });
+    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+    return new Response(errorMessage, { status: 500 });
   }
 });

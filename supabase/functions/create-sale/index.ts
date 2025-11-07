@@ -67,15 +67,16 @@ serve(async (req) => {
 
     } catch (e) {
       await supabaseClient.from('sales').update({ fiscal_status: 'error' }).eq('id', saleCreationData.sale_id);
-      // Opcional: registrar a mensagem de erro em `fiscal_documents`
-      return new Response(JSON.stringify({ ...saleCreationData, fiscal_status: 'error', error_message: e.message }), {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+      return new Response(JSON.stringify({ ...saleCreationData, fiscal_status: 'error', error_message: errorMessage }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
   } catch (e) {
     console.error('Unexpected error:', e);
-    return new Response(JSON.stringify({ error: e.message }), {
+    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

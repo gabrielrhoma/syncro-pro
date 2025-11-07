@@ -111,6 +111,7 @@ Sempre forneça respostas práticas e acionáveis.`;
     });
   } catch (e) {
     console.error("Chat assistant error:", e);
+    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }), 
       {
