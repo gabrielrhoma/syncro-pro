@@ -6,8 +6,10 @@ import AIAssistant from "@/components/AIAssistant";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { AIService } from "@/services/aiService";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useStore } from "@/contexts/StoreContext";
 
 export default function Dashboard() {
+  const { currentStore } = useStore();
   const [stats, setStats] = useState({
     totalSales: 0,
     totalProducts: 0,
@@ -26,14 +28,16 @@ export default function Dashboard() {
   }, []);
 
   const loadStats = async () => {
+    if (!currentStore) return;
+    
     const today = new Date().toISOString().split('T')[0];
 
     const [salesRes, productsRes, customersRes, todaySalesRes, lowStockRes] = await Promise.all([
-      supabase.from('sales').select('final_amount', { count: 'exact' }),
-      supabase.from('products').select('*', { count: 'exact' }),
+      supabase.from('sales').select('final_amount', { count: 'exact' }).eq('store_id', currentStore.id),
+      supabase.from('products').select('*', { count: 'exact' }).eq('store_id', currentStore.id),
       supabase.from('customers').select('*', { count: 'exact' }),
-      supabase.from('sales').select('final_amount').gte('created_at', today),
-      supabase.from('products').select('*').lt('stock_quantity', supabase.from('products').select('min_stock')),
+      supabase.from('sales').select('final_amount').eq('store_id', currentStore.id).gte('created_at', today),
+      supabase.from('products').select('*').eq('store_id', currentStore.id).lt('stock_quantity', supabase.from('products').select('min_stock')),
     ]);
 
     const totalSales = salesRes.data?.reduce((sum, sale) => sum + Number(sale.final_amount), 0) || 0;
@@ -49,6 +53,8 @@ export default function Dashboard() {
   };
 
   const loadChartData = async () => {
+    if (!currentStore) return;
+    
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - (6 - i));
@@ -60,6 +66,7 @@ export default function Dashboard() {
         const { data } = await supabase
           .from('sales')
           .select('final_amount')
+          .eq('store_id', currentStore.id)
           .gte('created_at', date)
           .lt('created_at', new Date(new Date(date).getTime() + 86400000).toISOString());
         

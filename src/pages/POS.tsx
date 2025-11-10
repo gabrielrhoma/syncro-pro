@@ -6,10 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Trash2, Search, ShoppingCart, QrCode } from "lucide-react";
+import { Trash2, Search, ShoppingCart, QrCode, Gift, Star } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { saleSchema } from "@/lib/validation";
 import { z } from "zod";
+import { useStore } from "@/contexts/StoreContext";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface Product {
   id: string;
@@ -30,6 +33,7 @@ interface SaleResult {
 }
 
 export default function POS() {
+  const { currentStore } = useStore();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -39,19 +43,124 @@ export default function POS() {
   const [customer_id, setCustomerId] = useState<string | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [redeemedPoints, setRedeemedPoints] = useState(0);
+  const [showLoyaltyDialog, setShowLoyaltyDialog] = useState(false);
 
   useEffect(() => {
     loadProducts();
   }, []);
 
   const loadProducts = async () => {
+    if (!currentStore) return;
+    
     const { data } = await supabase
       .from('products')
       .select('*')
       .eq('active', true)
+      .eq('store_id', currentStore.id)
       .gt('stock_quantity', 0);
     setProducts(data || []);
   };
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) return;
+
+    const { data: coupon, error } = await supabase
+      .from('coupons')
+      .select('*')
+      .eq('code', couponCode.toUpperCase())
+      .eq('active', true)
+      .single();
+
+    if (error || !coupon) {
+      toast.error("Cupom inválido ou expirado");
+      return;
+    }
+
+    const now = new Date();
+    if (new Date(coupon.start_date) > now || new Date(coupon.end_date) < now) {
+      toast.error("Cupom fora do período de validade");
+      return;
+    }
+
+    if (coupon.max_uses && coupon.uses_count >= coupon.max_uses) {
+      toast.error("Cupom esgotado");
+      return;
+    }
+
+    if (calculateTotal() < coupon.min_purchase_amount) {
+      toast.error(`Compra mínima de R$ ${coupon.min_purchase_amount.toFixed(2)} necessária`);
+      return;
+    }
+
+    setAppliedCoupon(coupon);
+    setRedeemedPoints(0);
+    
+    let discountValue = 0;
+    if (coupon.discount_type === 'percentage') {
+      discountValue = calculateTotal() * (coupon.discount_value / 100);
+    } else {
+      discountValue = coupon.discount_value;
+    }
+    
+    setDiscount(discountValue);
+    toast.success("Cupom aplicado!");
+  };
+
+  const loadLoyaltyPoints = async (customerId: string) => {
+    const { data } = await supabase
+      .from('customer_loyalty')
+      .select('points_balance')
+      .eq('customer_id', customerId)
+      .single();
+
+    setLoyaltyPoints(data?.points_balance || 0);
+  };
+
+  const redeemLoyalty = async () => {
+    if (!customer_id) {
+      toast.error("Selecione um cliente");
+      return;
+    }
+
+    if (redeemedPoints <= 0) {
+      toast.error("Informe quantos pontos resgatar");
+      return;
+    }
+
+    if (redeemedPoints > loyaltyPoints) {
+      toast.error("Pontos insuficientes");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('redeem-loyalty-points', {
+        body: {
+          p_customer_id: customer_id,
+          p_points_to_redeem: redeemedPoints
+        }
+      });
+
+      if (error) throw error;
+
+      setDiscount(data.discount_amount);
+      setAppliedCoupon(null);
+      setCouponCode("");
+      setShowLoyaltyDialog(false);
+      toast.success(`${redeemedPoints} pontos resgatados! Desconto: R$ ${data.discount_amount.toFixed(2)}`);
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    }
+  };
+
+  useEffect(() => {
+    if (customer_id) {
+      loadLoyaltyPoints(customer_id);
+    }
+  }, [customer_id]);
 
   const addToCart = (product: Product) => {
     const existingItem = cart.find((item) => item.id === product.id);
@@ -138,6 +247,7 @@ export default function POS() {
 
     try {
       const salePayload = {
+        p_store_id: currentStore?.id,
         customer_id: customer_id,
         payment_method: paymentMethod,
         cart_items: cart.map(item => ({
@@ -147,6 +257,7 @@ export default function POS() {
           subtotal: item.subtotal,
         })),
         cpf: cpf || null,
+        p_coupon_code: appliedCoupon?.code || null,
       };
 
       const { data, error } = await supabase.functions.invoke('create-sale', {
@@ -170,6 +281,9 @@ export default function POS() {
       setDiscount(0);
       setCpf("");
       setCustomerId(null);
+      setCouponCode("");
+      setAppliedCoupon(null);
+      setRedeemedPoints(0);
       loadProducts();
 
     } catch (error: any) {
@@ -185,6 +299,35 @@ export default function POS() {
 
   return (
     <>
+      <Dialog open={showLoyaltyDialog} onOpenChange={setShowLoyaltyDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resgatar Pontos de Fidelidade</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm">
+              Saldo disponível: <strong>{loyaltyPoints} pontos</strong>
+            </p>
+            <div className="space-y-2">
+              <Label>Quantos pontos resgatar?</Label>
+              <Input
+                type="number"
+                min="0"
+                max={loyaltyPoints}
+                value={redeemedPoints}
+                onChange={(e) => setRedeemedPoints(parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowLoyaltyDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={redeemLoyalty}>Resgatar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!saleResult} onOpenChange={() => setSaleResult(null)}>
         <DialogContent>
           <DialogHeader>
@@ -301,14 +444,47 @@ export default function POS() {
 
                 <div className="space-y-3 pt-4 border-t">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Desconto (R$)</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={discount}
-                      onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                    />
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <Gift className="h-4 w-4" />
+                      Cupom de Desconto
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Código do cupom"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                        disabled={!!appliedCoupon || redeemedPoints > 0}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={applyCoupon}
+                        disabled={!!appliedCoupon || redeemedPoints > 0}
+                      >
+                        Aplicar
+                      </Button>
+                    </div>
+                    {appliedCoupon && (
+                      <p className="text-xs text-green-600">
+                        Cupom {appliedCoupon.code} aplicado!
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setShowLoyaltyDialog(true)}
+                      disabled={!customer_id || !!appliedCoupon}
+                    >
+                      <Star className="mr-2 h-4 w-4" />
+                      Resgatar Pontos de Fidelidade
+                    </Button>
+                    {redeemedPoints > 0 && (
+                      <p className="text-xs text-green-600">
+                        {redeemedPoints} pontos resgatados!
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

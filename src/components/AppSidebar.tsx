@@ -14,7 +14,11 @@ import {
   TrendingUp,
   CalendarDays,
   UserCog,
-  Wallet
+  Wallet,
+  Factory,
+  Tag,
+  Gift,
+  Bell
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,28 +36,36 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
-const menuItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "PDV", url: "/pos", icon: ShoppingCart },
-  { title: "Produtos", url: "/products", icon: Package },
-  { title: "Vendas", url: "/sales", icon: BarChart3 },
-  { title: "Clientes", url: "/customers", icon: Users },
-  { title: "Fornecedores", url: "/suppliers", icon: Building2 },
-  { title: "Compras", url: "/purchases", icon: FileText },
-  { title: "Contas a Pagar", url: "/accounts-payable", icon: CreditCard },
-  { title: "Contas a Receber", url: "/accounts-receivable", icon: TrendingUp },
-  { title: "Financeiro", url: "/financial", icon: DollarSign },
-  { title: "Controle de Caixa", url: "/cash-control", icon: Wallet },
-  { title: "Relatórios", url: "/reports", icon: BarChart3 },
-  { title: "Agenda", url: "/calendar", icon: CalendarDays },
-  { title: "Usuários", url: "/users", icon: UserCog },
-  { title: "Configurações", url: "/settings", icon: Settings },
+type AppRole = 'admin' | 'manager' | 'user' | 'cashier';
+
+const menuItems: { title: string; url: string; icon: any; roles: AppRole[] }[] = [
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, roles: ['admin', 'manager', 'user', 'cashier'] },
+  { title: "PDV", url: "/pos", icon: ShoppingCart, roles: ['admin', 'manager', 'user', 'cashier'] },
+  { title: "Produtos", url: "/products", icon: Package, roles: ['admin', 'manager', 'user'] },
+  { title: "Vendas", url: "/sales", icon: BarChart3, roles: ['admin', 'manager', 'user'] },
+  { title: "Clientes", url: "/customers", icon: Users, roles: ['admin', 'manager', 'user'] },
+  { title: "Fornecedores", url: "/suppliers", icon: Building2, roles: ['admin', 'manager'] },
+  { title: "Compras", url: "/purchases", icon: FileText, roles: ['admin', 'manager'] },
+  { title: "Manufatura", url: "/manufacturing", icon: Factory, roles: ['admin', 'manager'] },
+  { title: "Contas a Pagar", url: "/accounts-payable", icon: CreditCard, roles: ['admin', 'manager'] },
+  { title: "Contas a Receber", url: "/accounts-receivable", icon: TrendingUp, roles: ['admin', 'manager'] },
+  { title: "Financeiro", url: "/financial", icon: DollarSign, roles: ['admin', 'manager'] },
+  { title: "Controle de Caixa", url: "/cash-control", icon: Wallet, roles: ['admin', 'manager', 'cashier'] },
+  { title: "Relatórios", url: "/reports", icon: BarChart3, roles: ['admin', 'manager'] },
+  { title: "Promoções", url: "/promotions", icon: Tag, roles: ['admin', 'manager'] },
+  { title: "Cupons", url: "/coupons", icon: Gift, roles: ['admin', 'manager'] },
+  { title: "Alertas", url: "/alerts", icon: Bell, roles: ['admin', 'manager', 'user'] },
+  { title: "Agenda", url: "/calendar", icon: CalendarDays, roles: ['admin', 'manager', 'user'] },
+  { title: "Usuários", url: "/users", icon: UserCog, roles: ['admin'] },
+  { title: "Configurações", url: "/settings", icon: Settings, roles: ['admin', 'manager'] },
 ];
 
 export function AppSidebar() {
   const { open } = useSidebar();
   const navigate = useNavigate();
+  const { role } = useAuth();
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -74,7 +86,9 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {menuItems
+                .filter(item => !role || item.roles.includes(role))
+                .map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink

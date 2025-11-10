@@ -26,8 +26,34 @@ export default function Auth() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session && event === 'SIGNED_IN') {
+        // Criar user_stores no primeiro login se não existir
+        const { data: existingStores } = await supabase
+          .from('user_stores')
+          .select('*')
+          .eq('user_id', session.user.id);
+
+        if (!existingStores || existingStores.length === 0) {
+          // Buscar a primeira loja disponível
+          const { data: firstStore } = await supabase
+            .from('stores')
+            .select('id')
+            .eq('active', true)
+            .limit(1)
+            .single();
+
+          if (firstStore) {
+            await supabase
+              .from('user_stores')
+              .insert({
+                user_id: session.user.id,
+                store_id: firstStore.id,
+                is_default: true
+              });
+          }
+        }
+
         navigate("/");
       }
     });

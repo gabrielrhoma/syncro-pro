@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { productSchema } from "@/lib/validation";
 import { z } from "zod";
+import { useStore } from "@/contexts/StoreContext";
 
 interface Product {
   id: string;
@@ -62,11 +63,14 @@ interface Variation {
 
 
 export default function Products() {
+  const { currentStore } = useStore();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   const [productAttributes, setProductAttributes] = useState<Record<string, string[]>>({});
   const [variations, setVariations] = useState<Variation[]>([]);
+  const [kitComponents, setKitComponents] = useState<{ product_id: string; quantity: number }[]>([]);
+  const [bomComponents, setBomComponents] = useState<{ product_id: string; quantity: number }[]>([]);
   const [open, setOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({
@@ -94,9 +98,12 @@ export default function Products() {
   }, []);
 
   const loadProducts = async () => {
+    if (!currentStore) return;
+    
     const { data, error } = await supabase
       .from('products')
       .select('*')
+      .eq('store_id', currentStore.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -184,6 +191,7 @@ export default function Products() {
         stock_quantity: validatedData.stock_quantity || 0,
         min_stock: validatedData.min_stock || 0,
         category_id: formData.category_id || null,
+        store_id: currentStore?.id,
       };
 
       let productId = editingProduct?.id;
@@ -212,6 +220,22 @@ export default function Products() {
           .upsert({ product_id: productId, ...taxInfoFormData });
 
         if (taxError) throw new Error("Erro ao salvar informações fiscais");
+
+        // Salvar Kit components
+        if (kitComponents.length > 0) {
+          await supabase.from('kit_items').delete().eq('kit_product_id', productId);
+          await supabase.from('kit_items').insert(
+            kitComponents.map(c => ({ kit_product_id: productId, component_product_id: c.product_id, quantity: c.quantity }))
+          );
+        }
+
+        // Salvar BOM components
+        if (bomComponents.length > 0) {
+          await supabase.from('product_bom').delete().eq('finished_product_id', productId);
+          await supabase.from('product_bom').insert(
+            bomComponents.map(c => ({ finished_product_id: productId, raw_material_product_id: c.product_id, quantity_needed: c.quantity }))
+          );
+        }
       }
       
       toast.success(editingProduct ? "Produto atualizado!" : "Produto criado!");
@@ -259,6 +283,8 @@ export default function Products() {
       pis_tax_situation: "",
       cofins_tax_situation: "",
     });
+    setKitComponents([]);
+    setBomComponents([]);
     setEditingProduct(null);
   };
 
@@ -318,9 +344,11 @@ export default function Products() {
               </DialogTitle>
             </DialogHeader>
             <Tabs defaultValue="general">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="general">Dados Gerais</TabsTrigger>
                 <TabsTrigger value="fiscal">Informações Fiscais</TabsTrigger>
+                <TabsTrigger value="kit">Kit</TabsTrigger>
+                <TabsTrigger value="bom">BOM</TabsTrigger>
                 <TabsTrigger value="variations">Variações</TabsTrigger>
               </TabsList>
 
@@ -400,6 +428,129 @@ export default function Products() {
                       <Input id="cofins_tax_situation" value={taxInfoFormData.cofins_tax_situation} onChange={(e) => setTaxInfoFormData({ ...taxInfoFormData, cofins_tax_situation: e.target.value })} />
                     </div>
                   </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleSubmit}>{editingProduct ? "Atualizar" : "Criar"}</Button>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="kit">
+                <div className="space-y-4 pt-4">
+                  <div className="flex gap-2">
+                    <Select onValueChange={(productId) => {
+                      if (!kitComponents.find(k => k.product_id === productId)) {
+                        setKitComponents([...kitComponents, { product_id: productId, quantity: 1 }]);
+                      }
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Adicionar componente" /></SelectTrigger>
+                      <SelectContent>
+                        {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {kitComponents.length > 0 && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Produto</TableHead>
+                          <TableHead>Quantidade</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {kitComponents.map((comp, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{products.find(p => p.id === comp.product_id)?.name}</TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={comp.quantity}
+                                onChange={(e) => {
+                                  const newComps = [...kitComponents];
+                                  newComps[idx].quantity = parseInt(e.target.value) || 1;
+                                  setKitComponents(newComps);
+                                }}
+                                className="w-24"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="icon" onClick={() => {
+                                setKitComponents(kitComponents.filter((_, i) => i !== idx));
+                              }}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleSubmit}>{editingProduct ? "Atualizar" : "Criar"}</Button>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="bom">
+                <div className="space-y-4 pt-4">
+                  <div className="flex gap-2">
+                    <Select onValueChange={(productId) => {
+                      if (!bomComponents.find(b => b.product_id === productId)) {
+                        setBomComponents([...bomComponents, { product_id: productId, quantity: 1 }]);
+                      }
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Adicionar matéria-prima" /></SelectTrigger>
+                      <SelectContent>
+                        {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {bomComponents.length > 0 && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Matéria-Prima</TableHead>
+                          <TableHead>Quantidade Necessária</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {bomComponents.map((comp, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{products.find(p => p.id === comp.product_id)?.name}</TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={comp.quantity}
+                                onChange={(e) => {
+                                  const newComps = [...bomComponents];
+                                  newComps[idx].quantity = parseFloat(e.target.value) || 0;
+                                  setBomComponents(newComps);
+                                }}
+                                className="w-24"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="icon" onClick={() => {
+                                setBomComponents(bomComponents.filter((_, i) => i !== idx));
+                              }}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                     <Button onClick={handleSubmit}>{editingProduct ? "Atualizar" : "Criar"}</Button>
