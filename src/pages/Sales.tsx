@@ -72,9 +72,21 @@ export default function Sales() {
   };
 
   const loadSales = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Get user's stores
+    const { data: userStores } = await supabase
+      .from('user_stores')
+      .select('store_id')
+      .eq('user_id', user.id);
+
+    const storeIds = userStores?.map(us => us.store_id) || [];
+
     const { data } = await supabase
       .from('sales')
       .select('*, customers(name), fiscal_documents(danfe_url)')
+      .in('store_id', storeIds)
       .order('created_at', { ascending: false });
 
     if (data) {

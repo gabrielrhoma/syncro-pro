@@ -61,22 +61,32 @@ export default function Purchases() {
   }, []);
 
   const loadOrders = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('purchase_orders')
       .select('*, suppliers(name)')
       .order('order_date', { ascending: false });
     
-    setOrders(data || []);
+    if (error) {
+      console.error('Error loading orders:', error);
+      setOrders([]);
+    } else {
+      setOrders(data || []);
+    }
   };
 
   const loadProducts = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('products')
       .select('id, name, cost_price')
       .eq('active', true)
       .order('name');
     
-    setProducts(data || []);
+    if (error) {
+      console.error('Error loading products:', error);
+      setProducts([]);
+    } else {
+      setProducts(data || []);
+    }
   };
 
   const loadSuppliers = async () => {
@@ -152,7 +162,7 @@ export default function Purchases() {
         status: 'pending',
       }])
       .select()
-      .single();
+      .maybeSingle();
 
     if (orderError || !orderData) {
       toast({ title: "Erro ao criar ordem de compra", variant: "destructive" });

@@ -54,13 +54,56 @@ export default function Manufacturing() {
 
   const handleCreate = async () => {
     try {
+      // Validation
+      if (!formData.product_id || !formData.product_id.trim()) {
+        toast.error('Selecione um produto válido');
+        return;
+      }
+
+      const quantity = parseInt(formData.quantity);
+      
+      if (isNaN(quantity) || quantity <= 0) {
+        toast.error('Quantidade deve ser um número positivo');
+        return;
+      }
+
+      if (quantity > 10000) {
+        toast.error('Quantidade muito alta (máximo 10.000)');
+        return;
+      }
+
+      // Verify product exists and has BOM
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('id, name')
+        .eq('id', formData.product_id)
+        .maybeSingle();
+
+      if (productError || !product) {
+        toast.error('Produto não encontrado');
+        return;
+      }
+
+      // Check if product has BOM defined
+      const { data: bomItems } = await supabase
+        .from('product_bom')
+        .select('id')
+        .eq('finished_product_id', formData.product_id)
+        .limit(1);
+
+      if (!bomItems || bomItems.length === 0) {
+        toast.error('Produto não possui lista de materiais (BOM) definida');
+        return;
+      }
+
       const orderNumber = `MFG-${Date.now()}`;
       const { error } = await supabase
         .from('production_orders')
         .insert({
           order_number: orderNumber,
           product_to_produce_id: formData.product_id,
-          quantity_to_produce: parseInt(formData.quantity),
+          quantity_to_produce: quantity,
+          status: 'pending',
         });
 
       if (error) throw error;

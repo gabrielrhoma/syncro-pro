@@ -137,7 +137,7 @@ export default function AccountsPayable() {
       }
 
       // Registrar transação de despesa
-      await supabase.from('transactions').insert([{
+      await supabase.from('transactions' as any).insert([{
         type: validatedTransaction.type,
         category: validatedTransaction.category,
         amount: validatedTransaction.amount,

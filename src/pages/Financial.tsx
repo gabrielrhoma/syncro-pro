@@ -47,11 +47,22 @@ export default function Financial() {
   }, []);
 
   const loadCashFlow = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: userStores } = await supabase
+      .from('user_stores')
+      .select('store_id')
+      .eq('user_id', user.id);
+
+    const storeIds = userStores?.map(us => us.store_id) || [];
+
     // Saldo em caixa (caixas abertos)
     const { data: registers } = await supabase
       .from('cash_registers')
       .select('current_cash_amount')
-      .eq('status', 'open');
+      .eq('status', 'open')
+      .in('store_id', storeIds);
     
     const cashBalance = registers?.reduce((sum, r) => sum + Number(r.current_cash_amount), 0) || 0;
 
@@ -83,12 +94,28 @@ export default function Financial() {
   };
 
   const loadTransactions = async () => {
-    const { data } = await supabase
-      .from('transactions')
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: userStores } = await supabase
+      .from('user_stores')
+      .select('store_id')
+      .eq('user_id', user.id);
+
+    const storeIds = userStores?.map(us => us.store_id) || [];
+
+    const { data, error } = await supabase
+      .from('transactions' as any)
       .select('*')
+      .in('store_id', storeIds)
       .order('transaction_date', { ascending: false });
 
-    setTransactions(data || []);
+    if (error) {
+      console.error('Error loading transactions:', error);
+      setTransactions([]);
+    } else {
+      setTransactions((data || []) as any);
+    }
   };
 
   const calculateTotals = () => {
@@ -116,14 +143,31 @@ export default function Financial() {
       });
 
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
 
-      const { error } = await supabase.from('transactions').insert([{
+      const { data: userStores } = await supabase
+        .from('user_stores')
+        .select('store_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!userStores) {
+        toast.error('Usuário não vinculado a loja');
+        return;
+      }
+
+      const { error } = await supabase.from('transactions' as any).insert([{
         type: validatedData.type,
         category: validatedData.category,
         description: validatedData.description,
         amount: validatedData.amount,
         payment_method: validatedData.payment_method,
-        created_by: user?.id,
+        created_by: user.id,
+        store_id: userStores.store_id,
       }]);
 
       if (error) {

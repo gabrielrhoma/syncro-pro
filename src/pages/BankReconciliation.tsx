@@ -23,28 +23,95 @@ export default function BankReconciliation() {
     }
 
     try {
+      // File size validation (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Arquivo muito grande (máximo 5MB)');
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      // Get user's current store
+      const { data: userStores } = await supabase
+        .from('user_stores')
+        .select('store_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!userStores) {
+        toast.error('Usuário não vinculado a nenhuma loja');
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = async (event) => {
         const text = event.target?.result as string;
-        const lines = text.split('\n').slice(1); // Remove header
-        
-        for (const line of lines) {
-          const [date, description, amount, balance] = line.split(',');
-          if (!date) continue;
+        const lines = text.split('\n').filter(line => line.trim());
 
-          await supabase
+        // Line count validation
+        if (lines.length > 10000) {
+          toast.error('Arquivo com muitas linhas (máximo 10.000)');
+          return;
+        }
+
+        let validCount = 0;
+        let errorCount = 0;
+
+        for (const line of lines.slice(1)) { // Skip header
+          const [date, description, amount, balance] = line.split(',');
+          
+          if (!date || !date.trim()) continue;
+
+          // Validate date format
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (!dateRegex.test(date.trim())) {
+            errorCount++;
+            continue;
+          }
+
+          const parsedAmount = parseFloat(amount || '0');
+          const parsedBalance = parseFloat(balance || '0');
+          
+          if (isNaN(parsedAmount) || isNaN(parsedBalance)) {
+            errorCount++;
+            continue;
+          }
+
+          const cleanDescription = (description || '').substring(0, 200);
+
+          const { error } = await supabase
             .from('bank_statement_lines')
             .insert({
-              transaction_date: date,
-              description: description || '',
-              amount: parseFloat(amount || '0'),
-              balance: parseFloat(balance || '0'),
+              transaction_date: date.trim(),
+              description: cleanDescription,
+              amount: parsedAmount,
+              balance: parsedBalance,
+              store_id: userStores.store_id,
+              matched: false,
             });
+
+          if (error) {
+            errorCount++;
+          } else {
+            validCount++;
+          }
         }
+
+        if (validCount > 0) {
+          toast.success(`${validCount} linhas processadas!${errorCount > 0 ? ` (${errorCount} erros)` : ''}`);
+        } else {
+          toast.error('Nenhuma linha válida encontrada');
+        }
+        
+        setFile(null);
       };
       
       reader.readAsText(file);
-      toast.success("Extrato processado!");
     } catch (error: any) {
       toast.error(`Erro: ${error.message}`);
     }
