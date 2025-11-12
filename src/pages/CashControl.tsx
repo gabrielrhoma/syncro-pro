@@ -11,6 +11,7 @@ import { DollarSign, Lock, Unlock, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AIService } from "@/services/aiService";
+import { useStore } from "@/contexts/StoreContext";
 
 interface CashRegister {
   id: string;
@@ -26,6 +27,7 @@ interface CashRegister {
 }
 
 export default function CashControl() {
+  const { currentStore } = useStore();
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [activeRegister, setActiveRegister] = useState<CashRegister | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
@@ -59,12 +61,18 @@ export default function CashControl() {
 
     const { data: { user } } = await supabase.auth.getUser();
 
+    if (!currentStore) {
+      toast.error('Selecione uma loja');
+      return;
+    }
+
     const { error } = await supabase.from('cash_registers').insert({
       name: formData.name,
       opening_balance: parseFloat(formData.opening_balance),
       current_cash_amount: parseFloat(formData.opening_balance),
       opened_by: user?.id,
       status: 'open',
+      store_id: currentStore.id,
     });
 
     if (error) {

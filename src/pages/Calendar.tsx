@@ -12,6 +12,7 @@ import { Plus, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { useStore } from "@/contexts/StoreContext";
 
 interface CalendarEvent {
   id: string;
@@ -24,6 +25,7 @@ interface CalendarEvent {
 }
 
 export default function Calendar() {
+  const { currentStore } = useStore();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [open, setOpen] = useState(false);

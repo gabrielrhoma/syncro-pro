@@ -10,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
+import { useStore } from "@/contexts/StoreContext";
 
 export default function Promotions() {
+  const { currentStore } = useStore();
   const [promotions, setPromotions] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -47,12 +49,18 @@ export default function Promotions() {
   };
 
   const handleSubmit = async () => {
+    if (!currentStore) {
+      toast.error('Selecione uma loja');
+      return;
+    }
+    
     try {
       const { error } = await supabase
         .from('promotions')
         .insert({
           ...formData,
           discount_value: parseFloat(formData.discount_value),
+          store_id: currentStore.id,
         });
 
       if (error) throw error;

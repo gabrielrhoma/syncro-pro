@@ -15,6 +15,7 @@ import { ptBR } from "date-fns/locale";
 import { Textarea } from "@/components/ui/textarea";
 import { accountsReceivableSchema, transactionSchema } from "@/lib/validation";
 import { z } from "zod";
+import { useStore } from "@/contexts/StoreContext";
 
 interface AccountReceivable {
   id: string;
@@ -32,6 +33,7 @@ interface Customer {
 }
 
 export default function AccountsReceivable() {
+  const { currentStore } = useStore();
   const [accounts, setAccounts] = useState<AccountReceivable[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -132,13 +134,17 @@ export default function AccountsReceivable() {
       }
 
       // Registrar transação de receita
-      await supabase.from('transactions').insert([{
-        type: validatedTransaction.type,
-        category: validatedTransaction.category,
-        amount: validatedTransaction.amount,
-        description: validatedTransaction.description,
-        payment_method: validatedTransaction.payment_method,
-      }]);
+      if (currentStore) {
+        await supabase.from('transactions').insert([{
+          type: validatedTransaction.type,
+          category: validatedTransaction.category,
+          amount: validatedTransaction.amount,
+          description: validatedTransaction.description,
+          payment_method: validatedTransaction.payment_method,
+          transaction_date: new Date().toISOString(),
+          store_id: currentStore.id,
+        }]);
+      }
 
       toast({ title: "Conta marcada como recebida!" });
       loadAccounts();
